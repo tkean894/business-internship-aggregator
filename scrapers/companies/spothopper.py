@@ -18,6 +18,7 @@ class SpotHopperScraper(GreenhouseScraper):
     company_name = "SpotHopper"
     career_url = "https://boards.greenhouse.io/spothopper"
     website_url = "https://www.spothopper.com"
+    industry = "Technology"
 
 
 if __name__ == "__main__":

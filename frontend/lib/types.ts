@@ -12,9 +12,15 @@ export type InternshipCategory =
   | "Strategy"
   | "Human Resources"
   | "Sales"
+  | "Real Estate"
   | "Other";
 
-export type InternshipSort = "posted_date_desc" | "last_seen_desc" | "company_name_asc" | "title_asc";
+export type InternshipSort =
+  | "posted_date_desc"
+  | "last_seen_desc"
+  | "first_seen_desc"
+  | "company_name_asc"
+  | "title_asc";
 
 export interface CompanySummary {
   id: number;
@@ -22,6 +28,7 @@ export interface CompanySummary {
   slug: string;
   career_url: string;
   website_url: string | null;
+  industry: string | null;
 }
 
 export interface CompanyOut {
@@ -30,6 +37,7 @@ export interface CompanyOut {
   slug: string;
   career_url: string;
   website_url: string | null;
+  industry: string | null;
   is_active: boolean;
   active_internship_count: number;
 }
@@ -47,6 +55,7 @@ export interface InternshipBrief {
   employment_type: string;
   application_url: string;
   posted_date: string | null;
+  first_seen_at: string;
   is_active: boolean;
 }
 

@@ -28,6 +28,17 @@ def _keyword_pattern(phrase: str) -> re.Pattern[str]:
     return re.compile(r"\b" + re.escape(phrase) + boundary, re.IGNORECASE)
 
 
+def _normalize_for_matching(title: str) -> str:
+    """Regex `\\b` treats underscores as word characters, so a raw title
+    like Medtronic's "Cardiovascular _Marketing Intern" (a stray
+    underscore from a messy ATS export) would NOT word-boundary-match
+    "marketing" - the "_" right before "m" isn't a boundary. Found via
+    real Phase 8 data. Replacing separator punctuation with spaces
+    before matching fixes this without weakening the boundary check
+    itself."""
+    return re.sub(r"[_/]+", " ", title)
+
+
 # Internship postings for technical roles this platform doesn't target.
 # Checked after the intern-title match, so e.g. "Software Engineer
 # Intern" is excluded even though it passes the intern check above.
@@ -60,6 +71,15 @@ EXCLUDE_KEYWORDS = (
     "flight analysis",       # Rocket Lab: "Flight Analysis Intern - Software"
     "mechanical development",  # Rocket Lab: "Neutron Mechanical Development Intern"
     "configuration management",  # Rocket Lab: "Electron Configuration Management Intern"
+    # Phase 8 additions. "engineering intern"/"engineer intern" above
+    # already excludes e.g. "Mechanical Engineering Intern", but not a
+    # title like "Mechanical Engineer" with "Intern" appearing elsewhere
+    # in the string - added explicitly for the technical disciplines a
+    # business-internship aggregator should never surface.
+    "mechanical engineer", "electrical engineer", "computer engineer",
+    "embedded engineer", "embedded systems",
+    "cyber security",        # AIA: "Intern, Cyber Security"
+    "it intern",             # AIA/Chevron: bare "IT Intern" - IT helpdesk/systems, not a business function
 )
 
 # (category, keyword) pairs. Deliberately keyed on specific function terms
@@ -73,13 +93,27 @@ EXCLUDE_KEYWORDS = (
 # Intern" was landing in Strategy purely because of keyword list order,
 # not because "strategy" was the more meaningful signal.
 CATEGORY_KEYWORDS: list[tuple[InternshipCategory, tuple[str, ...]]] = [
-    (InternshipCategory.FINANCE, ("finance", "financial", "treasury", "fp&a")),
-    (InternshipCategory.ACCOUNTING, ("accounting", "audit")),
+    (InternshipCategory.FINANCE, (
+        "finance", "financial", "treasury", "fp&a",
+        # Phase 8: Invesco (investment management) postings like "Early
+        # Career Intern - Investments (Bank Loans)" and "...(Risk)", and
+        # AIA (insurance) postings like "Actuarial Valuation & Reporting
+        # Intern", were all falling to OTHER - real, recurring investment/
+        # risk-analysis roles that fit within Finance for this platform's
+        # purposes rather than justifying their own separate categories
+        # (too little distinct volume yet to split out, per the "only add
+        # a category if there are enough real postings" rule).
+        "investment", "investments", "risk", "actuarial", "equity", "equities",
+    )),
+    (InternshipCategory.ACCOUNTING, (
+        "accounting", "audit",
+        "tax",  # Phase 8: HCVT (tax/accounting firm) - "Tax Internship", "International Tax Internship", etc.
+    )),
     (InternshipCategory.CONSULTING, ("consulting", "advisory", "professional services")),
     (InternshipCategory.MARKETING, ("marketing", "brand", "growth", "communications")),
     (InternshipCategory.SUPPLY_CHAIN, ("supply chain", "logistics", "procurement")),
     (InternshipCategory.OPERATIONS, ("operations", "ops")),
-    (InternshipCategory.STRATEGY, ("strategy", "strategic")),
+    (InternshipCategory.STRATEGY, ("strategy", "strategies", "strategic")),
     (InternshipCategory.HUMAN_RESOURCES, (
         "human resources", "people team", "talent acquisition", "recruiting",
         # Phase 7: Rocket Lab's "Learning & Development Intern" is a real,
@@ -96,6 +130,11 @@ CATEGORY_KEYWORDS: list[tuple[InternshipCategory, tuple[str, ...]]] = [
     # existing category - a legitimate taxonomy gap, not a bug to paper
     # over with a forced match into an unrelated category.
     (InternshipCategory.SALES, ("sales", "business development", "bdr", "account executive", "commercial excellence")),
+    # Phase 8: Invesco's recurring "Early Career Intern - Real Estate
+    # (Equity & Credit)" postings (multiple, across offices) - a distinct,
+    # explicitly-suggested category (task Step 6) with enough real volume
+    # to justify it, unlike Risk/Actuarial above.
+    (InternshipCategory.REAL_ESTATE, ("real estate",)),
 ]
 
 _EXCLUDE_PATTERNS = [(kw, _keyword_pattern(kw)) for kw in EXCLUDE_KEYWORDS]
@@ -120,13 +159,15 @@ def classify_internship(title: str) -> InternshipCategory | None:
     if not INTERN_TITLE_RE.search(title):
         return None
 
-    if any(pattern.search(title) for _, pattern in _EXCLUDE_PATTERNS):
+    normalized_title = _normalize_for_matching(title)
+
+    if any(pattern.search(normalized_title) for _, pattern in _EXCLUDE_PATTERNS):
         return None
 
     best_category: InternshipCategory | None = None
     best_keyword_length = 0
     for category, keyword, pattern in _CATEGORY_PATTERNS:
-        if len(keyword) > best_keyword_length and pattern.search(title):
+        if len(keyword) > best_keyword_length and pattern.search(normalized_title):
             best_category = category
             best_keyword_length = len(keyword)
 

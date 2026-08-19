@@ -17,6 +17,7 @@ export interface InternshipQuery {
   category?: InternshipCategory;
   company?: string;
   location?: string;
+  industry?: string;
   active?: boolean;
   sort?: InternshipSort;
   page?: number;

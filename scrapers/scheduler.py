@@ -15,11 +15,19 @@ import sys
 
 from scrapers.base_scraper import BaseScraper
 from scrapers.companies.abbott import AbbottScraper
+from scrapers.companies.aia import AIAScraper
+from scrapers.companies.appliedmaterials import AppliedMaterialsScraper
+from scrapers.companies.assurant import AssurantScraper
 from scrapers.companies.braze import BrazeScraper
+from scrapers.companies.chevron import ChevronScraper
 from scrapers.companies.cloudflare import CloudflareScraper
+from scrapers.companies.hcvt import HCVTScraper
+from scrapers.companies.invesco import InvescoScraper
+from scrapers.companies.medtronic import MedtronicScraper
 from scrapers.companies.redventures import RedVenturesScraper
 from scrapers.companies.robinhood import RobinhoodScraper
 from scrapers.companies.rocketlab import RocketLabScraper
+from scrapers.companies.smucker import SmuckerScraper
 from scrapers.companies.spacex import SpaceXScraper
 from scrapers.companies.spothopper import SpotHopperScraper
 
@@ -28,6 +36,7 @@ logger = logging.getLogger(__name__)
 # Add new company scrapers here - nothing else needs to change to pick
 # them up in scheduled/manual runs.
 SCRAPERS: list[type[BaseScraper]] = [
+    # Greenhouse
     RobinhoodScraper,
     CloudflareScraper,
     BrazeScraper,
@@ -35,7 +44,17 @@ SCRAPERS: list[type[BaseScraper]] = [
     SpaceXScraper,
     RedVenturesScraper,
     SpotHopperScraper,
+    # Workday
     AbbottScraper,
+    MedtronicScraper,
+    InvescoScraper,
+    AIAScraper,
+    AppliedMaterialsScraper,
+    ChevronScraper,
+    SmuckerScraper,
+    AssurantScraper,
+    # Lever
+    HCVTScraper,
 ]
 
 

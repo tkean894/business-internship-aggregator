@@ -18,6 +18,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               <Link href="/" className="text-sm font-bold tracking-tight text-slate-900">
                 Business Internship Aggregator
               </Link>
+              <Link href="/companies" className="text-sm font-medium text-slate-600 hover:text-slate-900 hover:underline">
+                Companies
+              </Link>
             </div>
           </nav>
           {children}

@@ -17,6 +17,7 @@ class RedVenturesScraper(GreenhouseScraper):
     company_name = "Red Ventures"
     career_url = "https://boards.greenhouse.io/redventures"
     website_url = "https://www.redventures.com"
+    industry = "Technology"
 
 
 if __name__ == "__main__":

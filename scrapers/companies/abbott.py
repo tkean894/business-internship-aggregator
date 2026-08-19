@@ -26,6 +26,7 @@ class AbbottScraper(WorkdayScraper):
     company_name = "Abbott Laboratories"
     career_url = "https://abbott.wd5.myworkdayjobs.com/abbottcareers"
     website_url = "https://www.abbott.com"
+    industry = "Healthcare"
 
 
 if __name__ == "__main__":

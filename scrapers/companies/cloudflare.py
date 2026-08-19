@@ -20,6 +20,7 @@ class CloudflareScraper(GreenhouseScraper):
     company_name = "Cloudflare, Inc."
     career_url = "https://boards.greenhouse.io/cloudflare"
     website_url = "https://www.cloudflare.com"
+    industry = "Technology"
 
 
 if __name__ == "__main__":

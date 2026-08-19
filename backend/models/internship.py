@@ -28,6 +28,7 @@ class InternshipCategory(str, enum.Enum):
     STRATEGY = "Strategy"
     HUMAN_RESOURCES = "Human Resources"
     SALES = "Sales"
+    REAL_ESTATE = "Real Estate"
     OTHER = "Other"
 
 

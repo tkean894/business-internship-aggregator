@@ -33,6 +33,7 @@ def list_companies(db: Session = Depends(get_db)) -> CompanyListResponse:
             slug=company.slug,
             career_url=company.career_url,
             website_url=company.website_url,
+            industry=company.industry,
             is_active=company.is_active,
             active_internship_count=count,
         )
@@ -62,6 +63,7 @@ def get_company(company_id: int, db: Session = Depends(get_db)) -> CompanyDetail
         slug=company.slug,
         career_url=company.career_url,
         website_url=company.website_url,
+        industry=company.industry,
         is_active=company.is_active,
         active_internship_count=active_internship_count,
         internships=[InternshipBrief.model_validate(i) for i in internships],

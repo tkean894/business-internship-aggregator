@@ -54,6 +54,7 @@ class BaseScraper(abc.ABC):
     company_name: str
     career_url: str
     website_url: str | None = None
+    industry: str | None = None
 
     def setup(self) -> None:
         """Optional hook for subclasses that need to open resources
@@ -228,10 +229,17 @@ class BaseScraper(abc.ABC):
                 slug=self.company_slug,
                 career_url=self.career_url,
                 website_url=self.website_url,
+                industry=self.industry,
             )
             session.add(company)
             session.flush()  # assign company.id for use below
             logger.info("%s: created company record (id=%d)", self.company_slug, company.id)
+        elif company.industry != self.industry:
+            # Backfills industry on companies created before Phase 8, and
+            # picks up a corrected value if a company config's industry
+            # changes later - cheap to refresh every run rather than
+            # requiring a one-off manual migration script.
+            company.industry = self.industry
         return company
 
     def _upsert_internship(

@@ -6,17 +6,21 @@ import { useTransition } from "react";
 interface FilterPanelProps {
   categories: string[];
   companies: string[];
+  industries: string[];
   selectedCategory?: string;
   selectedCompany?: string;
   selectedLocation?: string;
+  selectedIndustry?: string;
 }
 
 export default function FilterPanel({
   categories,
   companies,
+  industries,
   selectedCategory,
   selectedCompany,
   selectedLocation,
+  selectedIndustry,
 }: FilterPanelProps) {
   const router = useRouter();
   const pathname = usePathname();
@@ -41,13 +45,14 @@ export default function FilterPanel({
     params.delete("category");
     params.delete("company");
     params.delete("location");
+    params.delete("industry");
     params.delete("page");
     startTransition(() => {
       router.push(`${pathname}?${params.toString()}`);
     });
   }
 
-  const hasActiveFilters = Boolean(selectedCategory || selectedCompany || selectedLocation);
+  const hasActiveFilters = Boolean(selectedCategory || selectedCompany || selectedLocation || selectedIndustry);
 
   return (
     <div className={`flex flex-wrap items-center gap-3 ${isPending ? "opacity-60" : ""}`}>
@@ -69,6 +74,27 @@ export default function FilterPanel({
           ))}
         </select>
       </div>
+
+      {industries.length > 0 && (
+        <div>
+          <label htmlFor="filter-industry" className="sr-only">
+            Industry
+          </label>
+          <select
+            id="filter-industry"
+            value={selectedIndustry ?? ""}
+            onChange={(e) => updateParam("industry", e.target.value)}
+            className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-slate-500 focus:outline-none focus:ring-2 focus:ring-slate-200"
+          >
+            <option value="">All industries</option>
+            {industries.map((industry) => (
+              <option key={industry} value={industry}>
+                {industry}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
 
       <div>
         <label htmlFor="filter-company" className="sr-only">

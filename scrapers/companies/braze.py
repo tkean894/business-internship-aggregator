@@ -20,6 +20,7 @@ class BrazeScraper(GreenhouseScraper):
     company_name = "Braze, Inc."
     career_url = "https://boards.greenhouse.io/braze"
     website_url = "https://www.braze.com"
+    industry = "Technology"
 
 
 if __name__ == "__main__":

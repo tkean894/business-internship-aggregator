@@ -24,6 +24,7 @@ class CompanySummary(BaseModel):
     slug: str
     career_url: str
     website_url: str | None
+    industry: str | None
 
 
 class CompanyOut(BaseModel):
@@ -34,6 +35,7 @@ class CompanyOut(BaseModel):
     slug: str
     career_url: str
     website_url: str | None
+    industry: str | None
     is_active: bool
     active_internship_count: int
 

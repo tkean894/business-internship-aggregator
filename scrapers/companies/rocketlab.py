@@ -21,6 +21,7 @@ class RocketLabScraper(GreenhouseScraper):
     company_name = "Rocket Lab USA, Inc."
     career_url = "https://boards.greenhouse.io/rocketlab"
     website_url = "https://www.rocketlabusa.com"
+    industry = "Aerospace"
 
 
 if __name__ == "__main__":

@@ -3,8 +3,9 @@
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 const SORT_OPTIONS: { value: string; label: string }[] = [
-  { value: "posted_date_desc", label: "Most recently posted" },
-  { value: "last_seen_desc", label: "Recently seen" },
+  { value: "posted_date_desc", label: "Newest posted" },
+  { value: "first_seen_desc", label: "Recently discovered" },
+  { value: "last_seen_desc", label: "Recently updated" },
   { value: "company_name_asc", label: "Company name (A-Z)" },
   { value: "title_asc", label: "Title (A-Z)" },
 ];

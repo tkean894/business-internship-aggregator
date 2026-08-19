@@ -20,6 +20,7 @@ class SpaceXScraper(GreenhouseScraper):
     company_name = "Space Exploration Technologies Corp."
     career_url = "https://boards.greenhouse.io/spacex"
     website_url = "https://www.spacex.com"
+    industry = "Aerospace"
 
 
 if __name__ == "__main__":

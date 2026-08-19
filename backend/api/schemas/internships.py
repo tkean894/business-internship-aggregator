@@ -10,10 +10,18 @@ from backend.models.internship import InternshipCategory
 
 
 class InternshipSort(str, enum.Enum):
-    """Controlled list of allowed sort options - never raw user-supplied order-by."""
+    """Controlled list of allowed sort options - never raw user-supplied order-by.
+
+    POSTED_DATE_DESC orders by the source's own posting date (when the
+    company said the role went live). FIRST_SEEN_DESC orders by
+    `first_seen_at` - when this aggregator first discovered the listing,
+    which is not the same thing (see Internship.first_seen_at) and is
+    the more honest signal when a source doesn't provide a posting date.
+    """
 
     POSTED_DATE_DESC = "posted_date_desc"
     LAST_SEEN_DESC = "last_seen_desc"
+    FIRST_SEEN_DESC = "first_seen_desc"
     COMPANY_NAME_ASC = "company_name_asc"
     TITLE_ASC = "title_asc"
 
@@ -51,6 +59,7 @@ class InternshipBrief(BaseModel):
     employment_type: str
     application_url: str
     posted_date: date | None
+    first_seen_at: datetime
     is_active: bool
 
 

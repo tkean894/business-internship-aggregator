@@ -17,6 +17,7 @@ MAX_PAGE_SIZE = 100
 _SORT_COLUMNS = {
     InternshipSort.POSTED_DATE_DESC: Internship.posted_date.desc().nullslast(),
     InternshipSort.LAST_SEEN_DESC: Internship.last_seen_at.desc(),
+    InternshipSort.FIRST_SEEN_DESC: Internship.first_seen_at.desc(),
     InternshipSort.COMPANY_NAME_ASC: Company.name.asc(),
     InternshipSort.TITLE_ASC: Internship.title.asc(),
 }
@@ -29,6 +30,7 @@ def _apply_filters(
     category: InternshipCategory | None,
     company: str | None,
     location: str | None,
+    industry: str | None,
     active: bool | None,
 ) -> Select:
     if active is not None:
@@ -39,6 +41,8 @@ def _apply_filters(
         stmt = stmt.where(Company.name.ilike(f"%{company}%"))
     if location:
         stmt = stmt.where(Internship.location.ilike(f"%{location}%"))
+    if industry:
+        stmt = stmt.where(Company.industry == industry)
     if search:
         pattern = f"%{search}%"
         stmt = stmt.where(
@@ -59,12 +63,13 @@ def list_internships(
     category: InternshipCategory | None = Query(default=None, description="Filter by exact category"),
     company: str | None = Query(default=None, description="Filter by company name (partial match)"),
     location: str | None = Query(default=None, description="Filter by location (partial match)"),
+    industry: str | None = Query(default=None, description="Filter by exact company industry (see GET /companies for available values)"),
     active: bool | None = Query(default=True, description="Filter by active status; defaults to active-only. Pass active=false to see inactive (historical) postings."),
     sort: InternshipSort = Query(default=InternshipSort.POSTED_DATE_DESC, description="Sort order"),
     page: int = Query(default=1, ge=1, description="Page number, starting at 1"),
     page_size: int = Query(default=DEFAULT_PAGE_SIZE, ge=1, le=MAX_PAGE_SIZE, description=f"Results per page, max {MAX_PAGE_SIZE}"),
 ) -> InternshipListResponse:
-    filter_kwargs = dict(search=search, category=category, company=company, location=location, active=active)
+    filter_kwargs = dict(search=search, category=category, company=company, location=location, industry=industry, active=active)
 
     count_stmt = _apply_filters(select(func.count(Internship.id)).join(Internship.company), **filter_kwargs)
     total = db.scalar(count_stmt) or 0

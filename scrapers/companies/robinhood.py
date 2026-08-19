@@ -17,6 +17,7 @@ class RobinhoodScraper(GreenhouseScraper):
     company_name = "Robinhood Markets, Inc."
     career_url = "https://boards.greenhouse.io/robinhood"
     website_url = "https://robinhood.com"
+    industry = "Financial Services"
 
 
 if __name__ == "__main__":

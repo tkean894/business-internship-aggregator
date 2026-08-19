@@ -23,6 +23,11 @@ class Company(Base):
     slug: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)
     career_url: Mapped[str] = mapped_column(Text, nullable=False)
     website_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Free-text (not a DB enum - the set of industries is expected to grow
+    # organically as companies are added, unlike the fixed internship
+    # category taxonomy). Nullable since not-yet-backfilled rows may not
+    # have it yet; scrapers set it on every run (see BaseScraper).
+    industry: Mapped[str | None] = mapped_column(String(100), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="true")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

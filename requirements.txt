@@ -14,3 +14,4 @@ beautifulsoup4
 
 # Testing
 pytest
+httpx  # FastAPI's recommended test client for backend/api tests
