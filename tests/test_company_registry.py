@@ -31,7 +31,7 @@ def test_no_duplicate_slugs():
 
 def test_implemented_companies_have_working_scraper_modules():
     implemented = get_implemented()
-    assert len(implemented) == 26  # 16 from Phase 10 Step 1 + 10 Tier 2 companies added in Step 2
+    assert len(implemented) == 40  # 16 from Step 1 + 10 Tier 2 (Step 2) + 14 Tier 3 (Step 3)
 
     for company in implemented:
         assert company.scraper_module, company.slug

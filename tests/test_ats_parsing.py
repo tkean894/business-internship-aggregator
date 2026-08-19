@@ -63,6 +63,21 @@ class _WDCoNoFacet(WorkdayScraper):
     career_url = "https://example.test"
 
 
+class _WDCoCustomFacetParameter(WorkdayScraper):
+    """Phase 10 Step 3: a tenant using a differently-named facet
+    dimension for the same "Regular vs. Intern" concept (e.g. Magna
+    International's "Worker_Type" instead of "workerSubType")."""
+
+    base_url = "https://testco.wd1.myworkdayjobs.com"
+    tenant = "testco"
+    site = "TestCareers"
+    intern_facet_id = "facet-c"
+    facet_parameter = "Worker_Type"
+    company_slug = "test-wd-custom-facet-param-co"
+    company_name = "Test WD Custom Facet Param Co"
+    career_url = "https://example.test"
+
+
 class _WDCoSearchText(WorkdayScraper):
     """Phase 10 Step 2: a tenant with no workerSubType facet but a
     bounded searchText query (e.g. Guidehouse's search_text="intern")."""
@@ -152,6 +167,39 @@ def test_workday_fetch_raw_listings_stops_on_empty_page():
         session.post.assert_called_once()  # stopped after the first empty page, no detail requests
 
 
+def test_workday_fetch_raw_listings_skips_malformed_posting_missing_external_path():
+    # Regression test for a real bug found during Phase 10 Step 3: one
+    # of IFF's real Workday postings was `{"bulletFields": ["R21057"]}`
+    # with no "title" or "externalPath" at all, crashing the whole
+    # company's scrape with a KeyError. Must be skipped and logged, not
+    # fatal - the same per-listing error-isolation principle already
+    # applied during parsing, one stage earlier (raw fetch/pagination).
+    with patch("scrapers.workday.new_session") as mock_session_factory:
+        session = mock_session_factory.return_value
+        page_response = MagicMock()
+        page_response.json.return_value = {
+            "jobPostings": [
+                {"bulletFields": ["R21057"]},  # malformed - no title, no externalPath
+                {"title": "Finance Intern", "externalPath": "/job/finance-intern_R1"},
+            ]
+        }
+        page_response.raise_for_status.return_value = None
+
+        empty_response = MagicMock()
+        empty_response.json.return_value = {"jobPostings": []}
+        empty_response.raise_for_status.return_value = None
+
+        session.post.side_effect = [page_response, empty_response]
+
+        detail_response = MagicMock()
+        detail_response.json.return_value = {"jobPostingInfo": {"title": "Finance Intern"}}
+        detail_response.raise_for_status.return_value = None
+        session.get.return_value = detail_response
+
+        result = _WDCo().fetch_raw_listings()
+        assert result == [{"title": "Finance Intern"}]  # malformed posting silently excluded, real one kept
+
+
 def test_workday_multi_facet_id_ors_values_in_one_request():
     with patch("scrapers.workday.new_session") as mock_session_factory:
         session = mock_session_factory.return_value
@@ -164,6 +212,20 @@ def test_workday_multi_facet_id_ors_values_in_one_request():
         assert result == []
         _, kwargs = session.post.call_args
         assert kwargs["json"]["appliedFacets"] == {"workerSubType": ["facet-a", "facet-b"]}
+
+
+def test_workday_custom_facet_parameter_is_used_as_dict_key():
+    with patch("scrapers.workday.new_session") as mock_session_factory:
+        session = mock_session_factory.return_value
+        empty_response = MagicMock()
+        empty_response.json.return_value = {"jobPostings": []}
+        empty_response.raise_for_status.return_value = None
+        session.post.return_value = empty_response
+
+        result = _WDCoCustomFacetParameter().fetch_raw_listings()
+        assert result == []
+        _, kwargs = session.post.call_args
+        assert kwargs["json"]["appliedFacets"] == {"Worker_Type": ["facet-c"]}
 
 
 def test_workday_no_facet_scans_whole_board_with_empty_search():

@@ -73,12 +73,22 @@ class WorkdayScraper(BaseScraper):
     ORs multiple values within the same facet dimension) - needed when
     a tenant splits interns across more than one `workerSubType` value
     (e.g. PwC's separate "Intern" and "Intern (Trainee)" facets).
+
+    `facet_parameter` (Phase 10 Step 3): the facet *dimension name* is
+    almost always `workerSubType`, but not guaranteed - confirmed for
+    real on Magna International's tenant, which uses `Worker_Type`
+    instead for the exact same "Regular vs. Intern vs. Apprentice"
+    concept (found by inspecting that facet's own `descriptor` field,
+    same diagnostic already used to catch Accenture's repurposed
+    `workerSubType` in Step 2). Defaults to `workerSubType`; only
+    overridden when a tenant's own facet listing shows a different name.
     """
 
     base_url: str  # e.g. "https://abbott.wd5.myworkdayjobs.com"
     tenant: str
     site: str
     intern_facet_id: str | list[str] | None = None
+    facet_parameter: str = "workerSubType"
     search_text: str = ""
 
     def fetch_raw_listings(self) -> list[dict]:
@@ -92,7 +102,7 @@ class WorkdayScraper(BaseScraper):
                 if isinstance(self.intern_facet_id, str)
                 else list(self.intern_facet_id)
             )
-            applied_facets["workerSubType"] = facet_ids
+            applied_facets[self.facet_parameter] = facet_ids
 
         summaries: list[dict] = []
         seen_paths: set[str] = set()
@@ -110,6 +120,25 @@ class WorkdayScraper(BaseScraper):
             )
             response.raise_for_status()
             postings = response.json().get("jobPostings", [])
+
+            # A tenant's own board can contain a genuinely malformed
+            # entry - confirmed for real on IFF's tenant (Phase 10 Step
+            # 3): one posting in a 291-result search was just
+            # `{"bulletFields": ["R21057"]}`, missing "title" and
+            # "externalPath" entirely (likely a stale/orphaned
+            # requisition reference on Workday's own side, not anything
+            # this project controls). Skipped and logged here rather
+            # than crashing the whole company's scrape on a KeyError -
+            # the same per-listing error-isolation principle BaseScraper
+            # already applies during parsing, just one stage earlier.
+            malformed = [p for p in postings if not p.get("externalPath")]
+            for p in malformed:
+                logger.warning(
+                    "%s: skipping malformed Workday posting with no externalPath: %r",
+                    self.company_slug, p,
+                )
+            postings = [p for p in postings if p.get("externalPath")]
+
             # Workday's own `total` field is unreliable past the first
             # page (confirmed by testing - it silently drops to 0 on
             # subsequent pages while jobPostings still has real data), so

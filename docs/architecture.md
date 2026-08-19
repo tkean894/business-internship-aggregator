@@ -406,6 +406,42 @@ Truist, TD Bank/TD Securities, Verizon, and Accenture - each marked `needs_revie
 - PwC's board is large enough (249 relevant internships from one company) that it now represents a majority of this platform's total dataset - a real, honest consequence of PwC actually operating a Workday tenant with a genuinely large global internship program, not a scraping bug.
 - Piper Sandler currently has zero live postings matching either "intern" or "summer analyst" (the specific posting found during Step 1 research had closed by verification time) - the scraper and its config are correct; this is a live snapshot fact, not a defect.
 
+## Implementation Notes (Phase 10 Step 3 — Tier 3 Company Scraper Expansion)
+
+Goal: work through the 22 Tier 3 (`researched`) companies from the registry, live-verify each one's ATS access from scratch, and implement the strongest 10-15 by business relevance and posting volume - not necessarily every company. All 22 candidates were Workday tenants except one Lever candidate (Shield AI).
+
+### Companies implemented (14)
+
+Magna International, Polaris, GlobalFoundries, MKS Instruments, RaceTrac, Cox Enterprises, Anheuser-Busch InBev, IFF, Saputo, Primient, Marathon Petroleum, Medline, Airbus, and ICF International - each a small `WorkdayScraper` config, same one-file-per-company pattern as every prior phase.
+
+### Two more per-tenant quirks generalized into `WorkdayScraper`
+
+Building on Step 2's `search_text`/no-facet fallbacks:
+
+- **`facet_parameter`** - the employment-type facet *dimension name* is almost always `workerSubType`, but Magna International's tenant uses `Worker_Type` instead for the identical "Regular vs. Intern vs. Apprentice" concept (confirmed by reading that facet's own `descriptor` field, the same diagnostic that caught Accenture's repurposed `workerSubType` in Step 2). Now a config field, defaulting to `workerSubType`.
+- **Malformed-posting tolerance** - a real bug, not a design choice: IFF's tenant returned one posting in its `jobPostings` array that was just `{"bulletFields": ["R21057"]}`, missing `title` and `externalPath` entirely, crashing the whole company's scrape with an uncaught `KeyError` before this fix. `fetch_raw_listings` now filters out any posting missing `externalPath`, logging a warning, before the pagination/dedup logic runs - the same per-listing error-isolation principle `BaseScraper` already applies during parsing, just one stage earlier (raw fetch). Covered by a new regression test reproducing the exact malformed payload.
+
+### The "no clean facet, small board" and "searchText fallback" patterns generalize further
+
+Five more companies (RaceTrac, AB InBev, Saputo, Primient) needed the Step 2 "no facet, no search_text - scan the whole small board" pattern, and three (Cox, IFF, ICF) needed the "searchText fallback" pattern - each verified per-tenant to have a small-enough total to stay within the pagination safety cap, exactly as documented in `WorkdayScraper`'s own docstring. One recurring, honest finding: several of these tenants' `workerSubType` facets simply don't tag real, confirmed intern postings at all (AB InBev: 1 facet-tagged vs. several real ones found via search; Saputo, Primient similarly) - the whole-board scan with client-side title filtering is *more* complete than trusting an unreliable facet in these cases, not just a fallback.
+
+### Airbus: one global tenant, no per-country narrowing added
+
+Airbus's Workday tenant covers every legal entity worldwide (confirmed via its `hiringCompany` facet listing dozens of entities). A combined `workerSubType` + `hiringCompany` query narrowed to just "Airbus Americas, Inc." returned only 2 results - fewer than the real US (Mobile, AL) postings already confirmed via direct search - so that narrowing was deliberately not used. This scrapes globally and relies on the existing frontend US/Canada display filter to surface the relevant subset, the same pattern already established for Barclays and Disney, rather than building new multi-dimension-facet plumbing for uncertain benefit (an explicit "is a new capability justified here" judgment call, not an oversight).
+
+### Companies deferred (`needs_review`, 6) and deprioritized (`needs_review`, 4)
+
+- **3M** - real intern postings clearly exist, but no `workerSubType` facet value tags them and `searchText="intern"` returns the *entire* 633-total board with zero narrowing (unique among every tenant checked this phase) - no bounded implementation exists without a materially larger request-volume budget.
+- **Takeda** - tenant returns HTTP 500/422 consistently (jobs API and the career page itself), the same failure signature as Verizon in Step 2.
+- **Workiva** - two direct searches (including one targeting `job-boards.greenhouse.io` specifically) found only third-party aggregator listings; no direct ATS host URL, so platform and board token remain unconfirmed rather than guessed.
+- **SpartanNash, Hilcorp, ResMed, Sierra Nevada Corporation** - all technically clean and bounded (small board or a real facet value), but deprioritized given the 10-15 target: thin business-relevant volume relative to the 14 implemented (SpartanNash's board is retail/warehouse-heavy; Hilcorp, ResMed, and SNC skew almost entirely technical/scientific/engineering with only 1-3 current facet-tagged interns each). Not a compliance concern - reasonable candidates for a future pass.
+- **Shield AI** - endpoint fully verified and legitimate (`api.lever.co/v0/postings/shieldai`), but zero currently-open postings match the internship title pattern - the specific postings found during research had closed by verification time.
+
+### Real-data findings worth flagging
+
+- Posting churn continued to be the dominant "why is this zero" explanation this phase, not scraper defects: RaceTrac, Cox, ICF, and Shield AI all had real, confirmed intern postings during research that had closed by live-verification time just steps later - each scraper is correct and will pick these up automatically whenever new postings open.
+- Dedupe-collision handling fired again for real - GlobalFoundries (2, e.g. duplicate "2H University Intern - Process Integration" entries) and Airbus (2, duplicate "ACOLS35 Intern" entries) - both logged and skipped without crashing the run.
+
 **Delivery cadence** (`send_pending_notifications`): a user's `frequency` preference controls *when* their already-eligible events get emailed, not whether eligibility is tracked. `immediate` is always due; `daily`/`weekly` compare `now - last_notified_at` against the interval. All of a user's currently-PENDING events (which may mix new-match and saved-inactive reasons) are batched into a single digest email per send, even for `immediate` - since this job only ever runs on the scraper's own 6-hour cadence (there is no separate always-on server that could deliver sooner), "immediate" in practice means "on the next scraper run," and batching avoids sending someone five separate emails for five things discovered in the same run. A user with `email_enabled=False` or `frequency=off` is skipped entirely at send time; their events stay `PENDING` and become eligible for delivery automatically if they re-enable notifications later - nothing is lost, nothing is force-flushed.
 
 A failed send (`EmailSendError`) marks every event in that attempt `FAILED` with a truncated `error_message`, never `SENT` - `tests/test_notifications.py::test_failed_email_marks_events_failed_not_sent` asserts this directly, including that `sent_at` stays `None`. A failed digest is not retried by this run (the next scheduled run will pick up any *new* eligible events, but the failed ones stay `FAILED`, visible for manual investigation, rather than being silently retried into a potential duplicate).
