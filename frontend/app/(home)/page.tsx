@@ -8,7 +8,7 @@ import Pagination from "@/components/Pagination";
 import SearchBar from "@/components/SearchBar";
 import SortSelect from "@/components/SortSelect";
 import { getAllInternships, getCategories, getCompanies } from "@/lib/api";
-import { isUsLocation } from "@/lib/location";
+import { isUsOrCanadaLocation } from "@/lib/location";
 import type { InternshipCategory, InternshipSort } from "@/lib/types";
 
 const PAGE_SIZE = 12;
@@ -45,34 +45,34 @@ export default async function HomePage({ searchParams }: HomePageProps) {
     getCompanies(),
   ]);
 
-  // USA-only display filter (see lib/location.ts). Pagination has to run
-  // over the *filtered* set, not a raw API page filtered after the fact -
-  // otherwise a page whose raw results happen to be mostly/all non-US
-  // would look completely empty even though later pages have real
-  // matches (a real bug: see git history). getAllInternships() fetches
-  // every internship matching the current search/filters up front so
-  // filtering and pagination can both be computed correctly here.
-  const usInternships = allMatchingInternships.filter((item) => isUsLocation(item.location));
-  const totalUsInternships = usInternships.length;
-  const visibleItems = usInternships.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  // US/Canada-only display filter (see lib/location.ts). Pagination has
+  // to run over the *filtered* set, not a raw API page filtered after
+  // the fact - otherwise a page whose raw results happen to be mostly/
+  // all non-US/Canada would look completely empty even though later
+  // pages have real matches (a real bug: see git history).
+  // getAllInternships() fetches every internship matching the current
+  // search/filters up front so filtering and pagination can both be
+  // computed correctly here.
+  const naInternships = allMatchingInternships.filter((item) => isUsOrCanadaLocation(item.location));
+  const totalNaInternships = naInternships.length;
+  const visibleItems = naInternships.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
-  // Platform-wide USA-based set, independent of whatever search/filters
-  // are currently applied - used for the hero stat (this used to sum
-  // `active_internship_count` across every company unfiltered by
-  // location, which didn't match the actually-USA-filtered results
-  // below and looked like a bug: "118 active internships" next to a
-  // page of 41) and for the location filter's dropdown options, so the
-  // dropdown always offers every US location that could show a result,
-  // not just ones present in the currently-filtered subset. With no
-  // filters active, `usInternships` already IS the platform-wide set,
-  // so this only issues a second request when a filter is narrowing
-  // the results.
-  const platformWideUsInternships = hasActiveFilters
-    ? (await getAllInternships({ active: true })).filter((item) => isUsLocation(item.location))
-    : usInternships;
+  // Platform-wide US/Canada-based set, independent of whatever search/
+  // filters are currently applied - used for the hero stat (this used
+  // to sum `active_internship_count` across every company unfiltered by
+  // location, which didn't match the actually-filtered results below
+  // and looked like a bug: "118 active internships" next to a page of
+  // 41) and for the location filter's dropdown options, so the dropdown
+  // always offers every location that could show a result, not just
+  // ones present in the currently-filtered subset. With no filters
+  // active, `naInternships` already IS the platform-wide set, so this
+  // only issues a second request when a filter is narrowing the results.
+  const platformWideNaInternships = hasActiveFilters
+    ? (await getAllInternships({ active: true })).filter((item) => isUsOrCanadaLocation(item.location))
+    : naInternships;
   const industries = Array.from(new Set(companiesRes.items.map((c) => c.industry).filter((i): i is string => Boolean(i)))).sort();
   const locations = Array.from(
-    new Set(platformWideUsInternships.map((i) => i.location).filter((loc): loc is string => Boolean(loc))),
+    new Set(platformWideNaInternships.map((i) => i.location).filter((loc): loc is string => Boolean(loc))),
   ).sort();
 
   const emptyStateContext = category
@@ -95,7 +95,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
           Search internships across finance, consulting, marketing, analytics, operations, product, and more.
         </p>
         <p className="mt-3 text-sm text-slate-500">
-          {platformWideUsInternships.length} active US-based internship{platformWideUsInternships.length === 1 ? "" : "s"}{" "}
+          {platformWideNaInternships.length} active US &amp; Canada-based internship{platformWideNaInternships.length === 1 ? "" : "s"}{" "}
           across {companiesRes.total} compan{companiesRes.total === 1 ? "y" : "ies"} and{" "}
           {categoriesRes.categories.length} categories.
         </p>
@@ -135,7 +135,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
       </div>
 
       <p className="mb-4 text-sm text-slate-500">
-        {totalUsInternships} US-based internship{totalUsInternships === 1 ? "" : "s"} found
+        {totalNaInternships} US &amp; Canada-based internship{totalNaInternships === 1 ? "" : "s"} found
       </p>
 
       {visibleItems.length === 0 ? (
@@ -143,7 +143,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
       ) : (
         <>
           <InternshipList internships={visibleItems} />
-          <Pagination total={totalUsInternships} page={page} pageSize={PAGE_SIZE} currentParams={rawParams} />
+          <Pagination total={totalNaInternships} page={page} pageSize={PAGE_SIZE} currentParams={rawParams} />
         </>
       )}
     </main>

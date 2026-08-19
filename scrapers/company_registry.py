@@ -554,7 +554,7 @@ _TIER_4: list[CompanyRecord] = [
         career_url="https://cba.wd3.myworkdayjobs.com/CommBank_Careers",
         website_url="https://www.commbank.com.au",
         ats_config={"tenant": "cba", "site": "CommBank_Careers"},
-        notes="Excluded: 2026/27 Global Markets Summer Analyst Campaign observed live, but the program and postings are Australia-based. This platform's location filter only surfaces USA-based (and unlabeled/Remote) postings, so this company's listings would be filtered out of every search result - not a useful scrape target given current product scope.",
+        notes="Excluded: 2026/27 Global Markets Summer Analyst Campaign observed live, but the program and postings are Australia-based. This platform's location filter only surfaces US/Canada-based (and unlabeled/Remote) postings, so this company's listings would be filtered out of every search result - not a useful scrape target given current product scope.",
     ),
 ]
 

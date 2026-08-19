@@ -17,7 +17,7 @@ class BarclaysScraper(WorkdayScraper):
     York, Toronto, Singapore, London, etc.) - not filtered by country
     here, matching this project's existing approach (Chevron, AIA, and
     other multinational Tier 1 companies work the same way): scrape
-    everything the intern facet returns, let the frontend's USA-location
+    everything the intern facet returns, let the frontend's US/Canada-location
     display filter and the shared classifier handle relevance.
     """
 

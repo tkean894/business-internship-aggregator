@@ -19,7 +19,7 @@ class DisneyScraper(WorkdayScraper):
     verification time (postings churn; it is not evidence the facet is
     wrong). This is the same pattern already handled elsewhere in this
     project (Barclays, Chevron): scrape everything the correctly-named
-    intern facet returns, and let the existing frontend USA-location
+    intern facet returns, and let the existing frontend US/Canada-location
     display filter and shared classifier - both already relied on for
     every multinational company - determine what's actually shown.
     """

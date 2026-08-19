@@ -81,7 +81,7 @@ const FETCH_ALL_SAFETY_CAP = 5; // stop after 500 items regardless of `total`
 /**
  * Fetch every internship matching a query (ignoring `page`/`page_size`),
  * across as many backend pages as needed. Exists for the homepage's
- * USA-only display filter (see lib/location.ts): filtering a single
+ * US/Canada-only display filter (see lib/location.ts): filtering a single
  * fetched page of results client-side can leave a page looking empty
  * even though later pages have real matches (a real bug reported after
  * shipping the page-at-a-time version - see git history). Pagination
