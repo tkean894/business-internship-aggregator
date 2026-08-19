@@ -44,16 +44,55 @@ class WorkdayScraper(BaseScraper):
     `intern_facet_id` plus the usual BaseScraper fields - all fetching,
     pagination, and classification is shared here, mirroring how
     GreenhouseScraper factors out the Greenhouse-specific equivalent.
+
+    Not every Workday tenant exposes a `workerSubType` facet at all, and
+    even when one exists its meaning isn't guaranteed - confirmed for
+    real during Phase 10 Step 2 (Accenture's tenant reuses the
+    `workerSubType` facet *parameter* to carry a "Skills" facet instead
+    of job type). Two additional narrowing strategies exist for exactly
+    those cases, chosen per company based on what that tenant's board
+    actually supports (never guessed):
+
+    - `search_text`: passed as Workday's own `searchText` query field
+      (the same mechanism the tenant's own career-site search box uses -
+      not a bypass of anything). Only appropriate when the resulting
+      result count is small enough to fully paginate within `MAX_PAGES`
+      (confirmed per-tenant before use, e.g. Guidehouse's ~361-result
+      "intern" query fits; Truist's 846-result and TD's 1516-result
+      equivalents do not and were deferred instead of forced).
+    - Neither `intern_facet_id` nor `search_text` set: the tenant's
+      entire board is fetched with no server-side narrowing at all,
+      relying solely on the existing client-side `INTERN_TITLE_RE`
+      pre-filter below. Only appropriate for a tenant whose total board
+      size is small enough that this is itself bounded and cheap (e.g.
+      the Federal Reserve Bank of New York's ~105-job board, CIBC's
+      ~7-job board, Piper Sandler's ~43-job board) - never used for a
+      large board lacking a facet, which is instead deferred.
+
+    `intern_facet_id` may be a single GUID or a list of GUIDs (Workday
+    ORs multiple values within the same facet dimension) - needed when
+    a tenant splits interns across more than one `workerSubType` value
+    (e.g. PwC's separate "Intern" and "Intern (Trainee)" facets).
     """
 
     base_url: str  # e.g. "https://abbott.wd5.myworkdayjobs.com"
     tenant: str
     site: str
-    intern_facet_id: str
+    intern_facet_id: str | list[str] | None = None
+    search_text: str = ""
 
     def fetch_raw_listings(self) -> list[dict]:
         session = new_session()
         jobs_url = f"{self.base_url}/wday/cxs/{self.tenant}/{self.site}/jobs"
+
+        applied_facets: dict[str, list[str]] = {}
+        if self.intern_facet_id:
+            facet_ids = (
+                [self.intern_facet_id]
+                if isinstance(self.intern_facet_id, str)
+                else list(self.intern_facet_id)
+            )
+            applied_facets["workerSubType"] = facet_ids
 
         summaries: list[dict] = []
         seen_paths: set[str] = set()
@@ -62,10 +101,10 @@ class WorkdayScraper(BaseScraper):
             response = session.post(
                 jobs_url,
                 json={
-                    "appliedFacets": {"workerSubType": [self.intern_facet_id]},
+                    "appliedFacets": applied_facets,
                     "limit": PAGE_SIZE,
                     "offset": offset,
-                    "searchText": "",
+                    "searchText": self.search_text,
                 },
                 timeout=REQUEST_TIMEOUT_SECONDS,
             )

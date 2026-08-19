@@ -334,6 +334,78 @@ All three live in `backend/services/notifications.py` and run as one more step a
 
 **Notification idempotency** is a database constraint, not application bookkeeping: `notification_events` has `UNIQUE(user_id, internship_id, event_type)` (migration `ae99487d261d`), and every insert goes through Postgres's `ON CONFLICT DO NOTHING`. Re-running the whole module - a retried GitHub Actions workflow, a manual re-run, the same scraper cycle somehow firing twice - inserts zero new rows for anything already generated, by construction. This was verified for real, not just asserted: `tests/test_notifications.py` calls `generate_new_match_events`/`generate_saved_inactive_events` two and three times in a row and asserts the count stays at exactly one row, and a manual end-to-end script (see "Problems Encountered" in this phase's completion report) exercised the same idempotency against the real local Postgres instance before any of this shipped.
 
+## Implementation Notes (Phase 10 — Company Registry & Expansion Architecture)
+
+Goal (Step 1 of the Top-200 expansion only): design and stand up the planning infrastructure needed to scale from 16 companies to ~200 safely, without implementing new scrapers yet. This step produced `scrapers/company_registry.py` and `tests/test_company_registry.py`; no scraper, frontend, or production-schema code changed.
+
+### Why a separate registry module, not a DB table or schema change
+
+`backend/models/company.py` (`Company`) was re-inspected before writing any of this: it holds exactly the fields a *runtime, scraped* company needs (`name, slug, career_url, website_url, industry, is_active`), populated by `BaseScraper._get_or_create_company()` on each real run. It has no ATS-specific fields today, and adding any (a board token, a Workday tenant, a "status" that isn't "is this company active in the current dataset") would conflate two different concerns: what's true about a company that has real scraped data, versus what's true about a *candidate* company that may not have a scraper - or any confirmed ATS access - yet. A DB migration also implies production schema risk for what is, at this step, a static planning document. `scrapers/company_registry.py` is a plain Python module (a frozen `CompanyRecord` dataclass plus a list) for exactly that reason: it can describe a company at any research stage - candidate, confirmed-but-unimplemented, implemented - without touching the database at all, and it costs nothing to keep growing as research continues in later steps.
+
+### Registry shape
+
+`CompanyRecord` fields: `name, slug, industry, ats (ATSPlatform), tier (CompanyTier), status (CompanyStatus), career_url, website_url, ats_config (dict), notes, scraper_module`. `ats_config` is deliberately a loose dict rather than per-ATS subclasses, since its shape is already fixed by the three existing scrapers' own class attributes (`{"board_token"}` for Greenhouse, `{"tenant", "site", "intern_facet_id"?}` for Workday, `{"site"}` for Lever) - this registry is describing those, not reinventing them.
+
+### Tiering (`CompanyTier`, 1–4)
+
+Tiers sequence *implementation order*, not company quality:
+- **Tier 1** — implemented, running in production today (16 companies). Values are pulled directly from `scrapers/companies/*.py` (via a `grep` pass, not retyped from memory) and re-checked against those files in `tests/test_company_registry.py`, so the registry cannot silently drift from the real scraper configs.
+- **Tier 2** — a live posting URL on the ATS host itself (`*.myworkdayjobs.com`, `boards.greenhouse.io`, `jobs.lever.co`/`api.lever.co`) was directly observed during this step's research, giving an exact `tenant`/`board_token`/`site` identifier. Large, recognizable, business-relevant employers. `status = READY` — next in line to implement, needing only the same kind of live-endpoint confirmation every Tier 1 company already got before shipping, not fresh research.
+- **Tier 3** — real company and ATS platform identified with reasonable confidence (via search), but an exact identifier wasn't captured with a citable URL, and/or US-location posting volume needs confirming (several Tier 3 entries are foreign-headquartered companies - Saputo, Takeda, Airbus - where US-specific postings need to be confirmed before this platform's USA-location display filter would even surface them). `status = RESEARCHED`.
+- **Tier 4** — candidate only: ATS platform unconfirmed, or the only evidence found was via a third-party aggregator (e.g. builtin.com) rather than the ATS host itself. `status = NEEDS_REVIEW` — mirrors the Phase 8 Lever precedent (`jobs.lever.co` vs. the actual public `api.lever.co` Postings API): when direct evidence of the real, public endpoint is missing, mark it Needs Review rather than guessing a platform or identifier.
+
+One Tier 4 entry, Commonwealth Bank of Australia, is `status = EXCLUDED` rather than `NEEDS_REVIEW`: its Workday tenant/site *is* directly confirmed, but the observed program is Australia-based, and this platform's `frontend/lib/location.ts` USA-location display filter would silently drop every one of its postings from search results - a confirmed-but-not-useful target, not an unclear one.
+
+### Compliance rule (encoded, not just documented)
+
+The bar for `READY`/`IMPLEMENTED` is unchanged from every prior phase: a public, unauthenticated, officially-documented-or-equivalent endpoint (the same category as Greenhouse's board API, Workday's CXS API, and Lever's Postings API). `CompanyRecord` has no field that lets a company skip this - promotion from `NEEDS_REVIEW`/`RESEARCHED` to `READY` is a manual judgment call made at implementation time, the same way each of the 16 Tier 1 companies was individually verified before its scraper shipped.
+
+### Testing
+
+`tests/test_company_registry.py` checks: no duplicate slugs; every `IMPLEMENTED` company's `scraper_module` actually imports and defines a scraper class whose `company_slug` matches; every `READY` company has a known `ats` platform and non-empty `ats_config`; no `NEEDS_REVIEW`/`EXCLUDED` company has a `scraper_module`; and that `get_by_tier`/`get_by_ats` partition the full registry with no company missing. All 8 new tests pass alongside the full existing 77-test suite (85 total), confirming this step changed nothing about existing scraper, API, or notification behavior.
+
+## Implementation Notes (Phase 10 Step 2 — Tier 2 Company Scraper Expansion)
+
+Goal: take the 14 Tier 2 companies from Step 1's registry, live-verify each one's ATS access from scratch (never trusting Step 1's research as pre-confirmed), and implement whichever ones have a clean, compliant, boundedly-efficient public data source - deferring the rest rather than forcing them. All 14 Tier 2 candidates turned out to be Workday tenants; none were Greenhouse or Lever.
+
+### Live verification changed the plan for most of the batch
+
+Every company was re-verified against its live endpoint (robots.txt, a real POST to `/wday/cxs/{tenant}/{site}/jobs`, and its facet list) before any code was written, per this step's explicit instruction not to trust Step 1 blindly. This surfaced real, previously-unknown per-tenant differences:
+
+- **PwC**'s Step 1 site guess (`US_Entry_Level_Careers`) returned 0 total postings live - an inactive/empty site path. The correct one (`Global_Campus_Careers`, 1519 total postings) was found by testing the alternate path noted in Step 1's research.
+- **Verizon**'s tenant currently redirects to Workday's own `community.workday.com/maintenance-page` (HTTP 500/422) - confirmed tenant-specific, not a platform-wide outage, by checking that Abbott (already in production on the same `wd5` pod) responds normally.
+- **Accenture**'s `workerSubType` facet parameter is repurposed on this tenant to carry a "Skills" facet instead of job type (confirmed by reading the facet's own `descriptor` field, which literally said "Skills") - a genuine per-tenant anomaly, not a bug in this project's code.
+- **Truist**, **TD Bank**, **Guidehouse**, the **Federal Reserve Bank of New York**, **CIBC**, and **Piper Sandler** all lack a `workerSubType` facet entirely (some have no equivalent dimension at all; some repurpose the parameter for something else, as above).
+
+### Extending `WorkdayScraper` for tenants without a clean facet
+
+Rather than write one-off scraper subclasses, `scrapers/workday.py`'s shared `fetch_raw_listings` was generalized with two additional, purely-configuration-driven narrowing strategies (see its docstring for full detail):
+
+1. **`search_text`** — passed through to Workday's own `searchText` query field (the same mechanism the tenant's own career-site search box uses). Only used when the resulting total keeps full pagination within the existing `MAX_PAGES=25` (500-result) safety cap - confirmed per-tenant before use. Guidehouse's `searchText="intern"` returns 361 total (used); Truist's and TD's equivalent queries return 846 and 1516 respectively (both deferred instead of forced - see `scrapers/company_registry.py`).
+2. **No facet, no search text** — the tenant's entire board is fetched with zero server-side narrowing, relying solely on the existing client-side `INTERN_TITLE_RE` pre-filter. Only used for tenants whose total board size is itself small (Federal Reserve Bank of New York ~105, CIBC ~7, Piper Sandler ~43) - never for a large unfiltered board, which would silently truncate at the same cap instead.
+
+`intern_facet_id` also now accepts a list of GUIDs (Workday ORs multiple values within one facet dimension), needed for PwC's separate "Intern" and "Intern (Trainee)" `workerSubType` values.
+
+Both new modes reuse 100% of the existing pagination, detail-fetch, and parsing logic - no new scraper classes, no duplicated request logic.
+
+### Classification: "Summer Analyst" as an internship synonym
+
+Real, live evidence from three unrelated companies this phase (TD Securities: "Investment Banking Summer Analyst (Summer 2026)"; CIBC: "2026 Investment Banking Summer Analyst - Global Diversified Industries"; Piper Sandler: "Campus Recruiting - 2026 Investment Banking Summer Analyst - Restructuring NY") showed a recurring, cross-company title pattern with no "intern"/"internship" anywhere in the title at all - an industry-standard term for a finance internship, not a one-off phrase specific to one posting. `scrapers/classification.py`'s `INTERN_TITLE_RE` was widened from `\bintern(ship)?\b` to `\b(intern(ship)?|summer analyst)\b`. This only *adds* matches (a full-time "Investment Banking Analyst" role without "summer" is unaffected, since both words are required together) - covered by new tests in `tests/test_classification.py`.
+
+### Companies implemented (10 of 14)
+
+Barclays, Federal Reserve Bank of New York, CIBC, Piper Sandler, Texas Capital Bank, PwC, Guidehouse, GE Aerospace, Boeing, and The Walt Disney Company - each added as a small `WorkdayScraper` config under `scrapers/companies/` (following the existing one-file-per-company pattern) and registered in `scrapers/scheduler.py`. See the Phase 10 Step 2 completion report for the full per-company verification detail, local-database verification results, and production deployment confirmation.
+
+### Companies deferred (4 of 14)
+
+Truist, TD Bank/TD Securities, Verizon, and Accenture - each marked `needs_review` in `scrapers/company_registry.py` with a specific, evidence-based reason (unbounded result set, tenant-specific outage, or a broken/repurposed facet) rather than forced through. No scraper code exists for these; they remain candidates for a future pass once their specific blocker is resolved.
+
+### Real-data findings worth flagging
+
+- Dedupe-collision handling (added in Phase 7 after a real Rocket Lab collision) fired again for real on this batch - PwC (5 collisions, e.g. multiple identical "Intern/ Trainee" postings at "Tashkent"), GE Aerospace (1), and Disney (1) - each logged and skipped without crashing the run, confirming that safeguard generalizes beyond the company it was originally built for.
+- PwC's board is large enough (249 relevant internships from one company) that it now represents a majority of this platform's total dataset - a real, honest consequence of PwC actually operating a Workday tenant with a genuinely large global internship program, not a scraping bug.
+- Piper Sandler currently has zero live postings matching either "intern" or "summer analyst" (the specific posting found during Step 1 research had closed by verification time) - the scraper and its config are correct; this is a live snapshot fact, not a defect.
+
 **Delivery cadence** (`send_pending_notifications`): a user's `frequency` preference controls *when* their already-eligible events get emailed, not whether eligibility is tracked. `immediate` is always due; `daily`/`weekly` compare `now - last_notified_at` against the interval. All of a user's currently-PENDING events (which may mix new-match and saved-inactive reasons) are batched into a single digest email per send, even for `immediate` - since this job only ever runs on the scraper's own 6-hour cadence (there is no separate always-on server that could deliver sooner), "immediate" in practice means "on the next scraper run," and batching avoids sending someone five separate emails for five things discovered in the same run. A user with `email_enabled=False` or `frequency=off` is skipped entirely at send time; their events stay `PENDING` and become eligible for delivery automatically if they re-enable notifications later - nothing is lost, nothing is force-flushed.
 
 A failed send (`EmailSendError`) marks every event in that attempt `FAILED` with a truncated `error_message`, never `SENT` - `tests/test_notifications.py::test_failed_email_marks_events_failed_not_sent` asserts this directly, including that `sent_at` stays `None`. A failed digest is not retried by this run (the next scheduled run will pick up any *new* eligible events, but the failed ones stay `FAILED`, visible for manual investigation, rather than being silently retried into a potential duplicate).

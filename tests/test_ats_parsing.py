@@ -36,6 +36,46 @@ class _LeverCo(LeverScraper):
     career_url = "https://example.test"
 
 
+class _WDCoMultiFacet(WorkdayScraper):
+    """Phase 10 Step 2: a tenant needing multiple workerSubType values
+    OR'd together (e.g. PwC's separate "Intern" and "Intern (Trainee)")."""
+
+    base_url = "https://testco.wd1.myworkdayjobs.com"
+    tenant = "testco"
+    site = "TestCareers"
+    intern_facet_id = ["facet-a", "facet-b"]
+    company_slug = "test-wd-multi-facet-co"
+    company_name = "Test WD Multi-Facet Co"
+    career_url = "https://example.test"
+
+
+class _WDCoNoFacet(WorkdayScraper):
+    """Phase 10 Step 2: a tenant with no workerSubType facet at all
+    (e.g. the Federal Reserve Bank of New York, CIBC, Piper Sandler) -
+    the whole (small) board is scanned, relying on the client-side
+    INTERN_TITLE_RE pre-filter alone."""
+
+    base_url = "https://testco.wd1.myworkdayjobs.com"
+    tenant = "testco"
+    site = "TestCareers"
+    company_slug = "test-wd-no-facet-co"
+    company_name = "Test WD No Facet Co"
+    career_url = "https://example.test"
+
+
+class _WDCoSearchText(WorkdayScraper):
+    """Phase 10 Step 2: a tenant with no workerSubType facet but a
+    bounded searchText query (e.g. Guidehouse's search_text="intern")."""
+
+    base_url = "https://testco.wd1.myworkdayjobs.com"
+    tenant = "testco"
+    site = "TestCareers"
+    search_text = "intern"
+    company_slug = "test-wd-searchtext-co"
+    company_name = "Test WD SearchText Co"
+    career_url = "https://example.test"
+
+
 def test_greenhouse_parse_listing_maps_fields_correctly():
     raw = {
         "title": "Finance Intern",
@@ -110,6 +150,50 @@ def test_workday_fetch_raw_listings_stops_on_empty_page():
         result = _WDCo().fetch_raw_listings()
         assert result == []
         session.post.assert_called_once()  # stopped after the first empty page, no detail requests
+
+
+def test_workday_multi_facet_id_ors_values_in_one_request():
+    with patch("scrapers.workday.new_session") as mock_session_factory:
+        session = mock_session_factory.return_value
+        empty_response = MagicMock()
+        empty_response.json.return_value = {"jobPostings": []}
+        empty_response.raise_for_status.return_value = None
+        session.post.return_value = empty_response
+
+        result = _WDCoMultiFacet().fetch_raw_listings()
+        assert result == []
+        _, kwargs = session.post.call_args
+        assert kwargs["json"]["appliedFacets"] == {"workerSubType": ["facet-a", "facet-b"]}
+
+
+def test_workday_no_facet_scans_whole_board_with_empty_search():
+    with patch("scrapers.workday.new_session") as mock_session_factory:
+        session = mock_session_factory.return_value
+        empty_response = MagicMock()
+        empty_response.json.return_value = {"jobPostings": []}
+        empty_response.raise_for_status.return_value = None
+        session.post.return_value = empty_response
+
+        result = _WDCoNoFacet().fetch_raw_listings()
+        assert result == []
+        _, kwargs = session.post.call_args
+        assert kwargs["json"]["appliedFacets"] == {}
+        assert kwargs["json"]["searchText"] == ""
+
+
+def test_workday_search_text_fallback_is_sent_as_search_query():
+    with patch("scrapers.workday.new_session") as mock_session_factory:
+        session = mock_session_factory.return_value
+        empty_response = MagicMock()
+        empty_response.json.return_value = {"jobPostings": []}
+        empty_response.raise_for_status.return_value = None
+        session.post.return_value = empty_response
+
+        result = _WDCoSearchText().fetch_raw_listings()
+        assert result == []
+        _, kwargs = session.post.call_args
+        assert kwargs["json"]["appliedFacets"] == {}
+        assert kwargs["json"]["searchText"] == "intern"
 
 
 def test_lever_parse_listing_maps_fields_correctly():

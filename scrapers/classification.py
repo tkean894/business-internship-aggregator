@@ -8,7 +8,22 @@ from backend.models.internship import InternshipCategory
 # on the substring "intern" (confirmed necessary during Phase 2 testing -
 # a naive `"intern" in title.lower()` matched 8 non-internship
 # "International ..." roles at Robinhood out of 9 "matches").
-INTERN_TITLE_RE = re.compile(r"\bintern(ship)?\b", re.IGNORECASE)
+#
+# "summer analyst" (Phase 10 Step 2): investment banking/financial
+# services internships are frequently titled e.g. "Investment Banking
+# Summer Analyst (Summer 2026)" or "Campus Recruiting - 2026 Investment
+# Banking Summer Analyst - Restructuring NY" with no "intern"/
+# "internship" anywhere in the title - confirmed across multiple real,
+# unrelated companies' live postings during this phase's research (TD
+# Securities, CIBC, Piper Sandler all titled this way; Truist and Texas
+# Capital Bank happen to also append "(Internship)" to the same "Summer
+# Analyst Program" phrasing, confirming it's the same role, just
+# inconsistently labeled). This is an industry-standard synonym for a
+# finance internship, not a one-off keyword for a single company's
+# posting - "Summer Analyst" without "summer" (i.e. a full-time,
+# post-graduation "Analyst" role) is a different, non-internship title
+# and is unaffected since the phrase requires both words together.
+INTERN_TITLE_RE = re.compile(r"\b(intern(ship)?|summer analyst)\b", re.IGNORECASE)
 
 
 # Phrases that must match as a PREFIX of a longer word - specifically,

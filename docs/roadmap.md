@@ -130,7 +130,22 @@ This phase grew from its original scope (automation only) to include full produc
 
 **Definition of Done:** ✅ Users can create accounts, sign in/out, save internships, and configure notification preferences (categories/industries/locations/frequency); anonymous browsing is entirely unaffected. Verified against production (see completion report for this phase). Application tracking deliberately deferred.
 
-## Phase 9 — Intelligence
+## Phase 9 — Top 200 Business Internship Company Expansion (Step 1: Registry & Architecture — Complete)
+
+**Goal:** Scale the company dataset from 16 toward ~200 without sacrificing data quality, legitimate/compliant scraping, or maintainability. Internally tracked as "Phase 10" in project instructions at the time (numbering had drifted from this document again after Phase 7 was inserted - see that phase's note); implemented here since "Intelligence" (below) had not yet started and this phase's own instructions were explicit that only Step 1 — research, registry, and architecture, not scraper implementation — was in scope.
+
+**Key Tasks (Step 1 only):**
+- ~~Research and document candidate companies toward the ~200 target~~ — done: `scrapers/company_registry.py`, 51 companies total (16 already implemented + 35 new candidates), prioritizing business-relevant roles/industries over raw company size
+- ~~Design a centralized company registry~~ — done: a standalone module (not a DB schema change - `backend/models/company.py` was re-inspected and intentionally left untouched, see `docs/architecture.md` "Implementation Notes (Phase 10)" for why), tracking ATS platform/identifiers, tier, status, and research notes per company independent of whether a scraper exists yet
+- ~~ATS research with compliance verification~~ — done, applying the same public/unauthenticated-endpoint bar as every prior ATS integration; companies with only indirect or aggregator-sourced evidence are marked `needs_review` rather than guessed at (the Phase 8 Lever precedent)
+- ~~Build a prioritization/tiering system~~ — done: 4 tiers (implemented / ready-to-implement with confirmed identifiers / researched-needs-confirmation / needs-review-or-excluded), documented in `docs/architecture.md`
+- Full 200-company scraper rollout — deliberately **not** started; this step is registry and architecture only, pending approval
+
+**Definition of Done:** ✅ Registry module exists and is tested (`tests/test_company_registry.py`, 8 tests, all passing alongside the existing 77 — 85 total, zero regressions), can represent all 16 currently-implemented companies with values cross-checked against their real scraper configs, and documents a clear, compliant path toward 200 without adding a single new scraper, frontend change, or production schema change. Full company-by-company detail and next-step recommendation in this step's completion report. Stopped here per explicit instruction, pending approval of the registry and company list before any scraper implementation begins.
+
+**Step 2 (Tier 2 Company Scraper Expansion — Complete):** Took the 14 Tier 2 (`ready`) companies from the registry, live-verified each one's ATS access independently (not trusting Step 1's research), and implemented 10 of them: Barclays, Federal Reserve Bank of New York, CIBC, Piper Sandler Companies, Texas Capital Bank, PwC, Guidehouse, GE Aerospace, The Boeing Company, and The Walt Disney Company - each a small `WorkdayScraper` config reusing the existing shared ATS logic, no new scraper classes. `scrapers/workday.py` gained two generalized, config-driven fallback modes (a bounded `search_text` query; a whole-small-board scan) for tenants lacking a clean `workerSubType` facet, and `scrapers/classification.py`'s `INTERN_TITLE_RE` gained a "summer analyst" synonym after real cross-company evidence showed it's a common finance-internship title with no "intern"/"internship" in it at all. 4 companies (Truist, TD Bank, Verizon, Accenture) were deferred with documented, evidence-based reasons rather than forced. Production companies: 16 → 26. See `docs/architecture.md` ("Implementation Notes (Phase 10 Step 2)") and this step's completion report for full verification, local-database, and production-deployment detail.
+
+## Phase 10 — Intelligence
 
 **Goal:** Add AI-assisted features once the platform has real usage and data.
 

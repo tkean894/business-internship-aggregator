@@ -18,18 +18,28 @@ from scrapers.companies.abbott import AbbottScraper
 from scrapers.companies.aia import AIAScraper
 from scrapers.companies.appliedmaterials import AppliedMaterialsScraper
 from scrapers.companies.assurant import AssurantScraper
+from scrapers.companies.barclays import BarclaysScraper
+from scrapers.companies.boeing import BoeingScraper
 from scrapers.companies.braze import BrazeScraper
 from scrapers.companies.chevron import ChevronScraper
+from scrapers.companies.cibc import CIBCScraper
 from scrapers.companies.cloudflare import CloudflareScraper
+from scrapers.companies.disney import DisneyScraper
+from scrapers.companies.geaerospace import GEAerospaceScraper
+from scrapers.companies.guidehouse import GuidehouseScraper
 from scrapers.companies.hcvt import HCVTScraper
 from scrapers.companies.invesco import InvescoScraper
 from scrapers.companies.medtronic import MedtronicScraper
+from scrapers.companies.nyfed import NewYorkFedScraper
+from scrapers.companies.pipersandler import PiperSandlerScraper
+from scrapers.companies.pwc import PwCScraper
 from scrapers.companies.redventures import RedVenturesScraper
 from scrapers.companies.robinhood import RobinhoodScraper
 from scrapers.companies.rocketlab import RocketLabScraper
 from scrapers.companies.smucker import SmuckerScraper
 from scrapers.companies.spacex import SpaceXScraper
 from scrapers.companies.spothopper import SpotHopperScraper
+from scrapers.companies.texascapitalbank import TexasCapitalBankScraper
 
 logger = logging.getLogger(__name__)
 
@@ -53,6 +63,17 @@ SCRAPERS: list[type[BaseScraper]] = [
     ChevronScraper,
     SmuckerScraper,
     AssurantScraper,
+    # Workday (Phase 10 Step 2 - Tier 2 expansion)
+    BarclaysScraper,
+    TexasCapitalBankScraper,
+    GEAerospaceScraper,
+    BoeingScraper,
+    DisneyScraper,
+    PwCScraper,
+    NewYorkFedScraper,
+    CIBCScraper,
+    PiperSandlerScraper,
+    GuidehouseScraper,
     # Lever
     HCVTScraper,
 ]

@@ -24,17 +24,19 @@ An automated pipeline that scrapes company career pages for business-relevant in
 
 ## Current Status
 
-**Deployed to production, scraping 16 real companies across 3 ATS platforms, with user accounts and notifications (Phases 1–9 complete).** PostgreSQL schema, SQLAlchemy models, and Alembic migrations are implemented and tested. A FastAPI backend (search, filtering by category/company/location/industry, pagination, sorting - all still fully usable anonymously) is implemented and tested against live data, plus authenticated endpoints for saving internships and managing notification preferences. A Next.js (App Router, TypeScript, Tailwind) frontend consumes that API — search, filters, sorting, freshness/"New" indicators, category and company discovery, internship and company detail pages, sign-in/sign-up, saving internships, and a notification-preferences page. The scraper runs on a schedule via GitHub Actions against a managed production database, followed by an idempotent notification-processing step (see "Live Application" and "Production" below). See `docs/roadmap.md` for the full phase-by-phase build order.
+**Deployed to production, scraping 26 real companies across 3 ATS platforms, with user accounts and notifications (Phases 1–9 complete).** PostgreSQL schema, SQLAlchemy models, and Alembic migrations are implemented and tested. A FastAPI backend (search, filtering by category/company/location/industry, pagination, sorting - all still fully usable anonymously) is implemented and tested against live data, plus authenticated endpoints for saving internships and managing notification preferences. A Next.js (App Router, TypeScript, Tailwind) frontend consumes that API — search, filters, sorting, freshness/"New" indicators, category and company discovery, internship and company detail pages, sign-in/sign-up, saving internships, and a notification-preferences page. The scraper runs on a schedule via GitHub Actions against a managed production database, followed by an idempotent notification-processing step (see "Live Application" and "Production" below). See `docs/roadmap.md` for the full phase-by-phase build order.
 
 ## Supported ATS Platforms & Companies
 
 | ATS | Companies |
 |---|---|
 | Greenhouse | Robinhood, Cloudflare, Braze, Rocket Lab, SpaceX, Red Ventures, SpotHopper |
-| Workday | Abbott Laboratories, Medtronic, Invesco, AIA, Applied Materials, Chevron, Smucker, Assurant |
+| Workday | Abbott Laboratories, Medtronic, Invesco, AIA, Applied Materials, Chevron, Smucker, Assurant, Barclays, Federal Reserve Bank of New York, CIBC, Piper Sandler, Texas Capital Bank, PwC, Guidehouse, GE Aerospace, Boeing, The Walt Disney Company |
 | Lever | HCVT |
 
-All three integrations share the same `BaseScraper` lifecycle (company lookup, dedup, insert/update, inactive-lifecycle handling, per-listing error isolation, scraper-run metrics). A company only ever needs a small config file under `scrapers/companies/` — see "Scraper Architecture" in `docs/architecture.md`. Companies span Technology, Financial Services, Aerospace, Healthcare, Investment Management, Insurance, Manufacturing, Energy, Food & Beverage, and Consulting.
+All three integrations share the same `BaseScraper` lifecycle (company lookup, dedup, insert/update, inactive-lifecycle handling, per-listing error isolation, scraper-run metrics). A company only ever needs a small config file under `scrapers/companies/` — see "Scraper Architecture" in `docs/architecture.md`. Companies span Technology, Financial Services, Aerospace, Healthcare, Investment Management, Insurance, Manufacturing, Energy, Food & Beverage, Consulting, and Media & Entertainment.
+
+**Expansion in progress:** `scrapers/company_registry.py` tracks 25 additional researched candidate companies (toward a ~200-company target) with per-company ATS platform, tier, and verification status — none implemented yet, plus 4 companies deliberately deferred after live verification (unbounded result sets or a currently-broken/inaccessible endpoint). See `docs/architecture.md` ("Implementation Notes (Phase 10 Step 2)") and `docs/roadmap.md` (Phase 9) for the registry design and rollout plan.
 
 ## Tech Stack
 

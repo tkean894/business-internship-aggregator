@@ -64,3 +64,19 @@ def test_engineering_intern_exclusion_matches_internship_suffix():
 
 def test_business_operations_is_not_excluded_by_engineering_keywords():
     assert classify_internship("Summer 2027 Business Operations Internship/Co-op") == InternshipCategory.OPERATIONS
+
+
+def test_summer_analyst_is_treated_as_an_internship_title():
+    # Phase 10 Step 2: real, live titles from TD Securities, CIBC, and
+    # Piper Sandler contain neither "intern" nor "internship" at all.
+    assert classify_internship("Investment Banking Summer Analyst (Summer 2026)") == InternshipCategory.FINANCE
+    assert classify_internship("2026 Investment Banking Summer Analyst - Global Diversified Industries") == InternshipCategory.FINANCE
+    assert classify_internship("Campus Recruiting - 2026 Investment Banking Summer Analyst - Restructuring NY") == InternshipCategory.FINANCE
+
+
+def test_full_time_analyst_without_summer_is_not_an_internship():
+    # "summer analyst" requires both words together - a full-time,
+    # post-graduation "Analyst" role must not be swept in.
+    assert classify_internship("Investment Banking Analyst") is None
+    assert classify_internship("Equity Research Associate - Large Cap Banks") is None
+    assert classify_internship("Investment Banking Associate - Chemicals") is None
