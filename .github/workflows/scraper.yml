@@ -1,0 +1,43 @@
+name: Scrape internships
+
+on:
+  schedule:
+    # Every 6 hours. Cron is UTC. Greenhouse-hosted boards update at most
+    # a few times a day, so this is frequent enough to stay current
+    # without hammering their API or burning GitHub Actions minutes.
+    - cron: "0 */6 * * *"
+  workflow_dispatch: {}
+
+# Avoid two runs writing to the production DB at the same time (e.g. a
+# manual trigger overlapping a scheduled one).
+concurrency:
+  group: scraper
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Apply database migrations
+        run: python -m alembic upgrade head
+
+      - name: Run scrapers
+        run: python -m scrapers.scheduler

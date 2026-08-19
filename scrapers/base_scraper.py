@@ -26,13 +26,15 @@ class ScraperRunResult:
     updated_count: int = 0
     skipped_count: int = 0
     error_count: int = 0
+    deactivated_count: int = 0
     errors: list[str] = field(default_factory=list)
 
     def summary(self) -> str:
         return (
             f"[{self.company_slug}] raw={self.raw_count} relevant={self.relevant_count} "
             f"created={self.created_count} updated={self.updated_count} "
-            f"skipped={self.skipped_count} errors={self.error_count}"
+            f"skipped={self.skipped_count} deactivated={self.deactivated_count} "
+            f"errors={self.error_count}"
         )
 
 
@@ -85,6 +87,7 @@ class BaseScraper(abc.ABC):
             session = SessionLocal()
             try:
                 company = self._get_or_create_company(session)
+                seen_dedupe_keys: set[str] = set()
 
                 for raw in raw_listings:
                     try:
@@ -100,7 +103,22 @@ class BaseScraper(abc.ABC):
                         continue
 
                     result.relevant_count += 1
-                    self._upsert_internship(session, company, parsed, result)
+                    dedupe_key = self._upsert_internship(session, company, parsed, result)
+                    seen_dedupe_keys.add(dedupe_key)
+
+                # A listing still in the DB as active but absent from this
+                # run's raw listings is no longer posted - mark it inactive
+                # rather than deleting (historical data stays queryable).
+                # Only runs here if fetch_raw_listings() succeeded above, so
+                # a scraper that fails outright never wipes out its company's
+                # listings.
+                stale_query = session.query(Internship).filter_by(company_id=company.id, is_active=True)
+                if seen_dedupe_keys:
+                    stale_query = stale_query.filter(~Internship.dedupe_key.in_(seen_dedupe_keys))
+                still_active = stale_query.all()
+                for internship in still_active:
+                    internship.is_active = False
+                    result.deactivated_count += 1
 
                 session.commit()
             finally:
@@ -131,7 +149,7 @@ class BaseScraper(abc.ABC):
         company: Company,
         parsed: NormalizedInternship,
         result: ScraperRunResult,
-    ) -> None:
+    ) -> str:
         dedupe_key = compute_dedupe_key(company.id, parsed.title, parsed.location)
         existing = session.query(Internship).filter_by(dedupe_key=dedupe_key).one_or_none()
         now = datetime.now(timezone.utc)
@@ -166,3 +184,5 @@ class BaseScraper(abc.ABC):
             existing.is_active = True
             existing.last_seen_at = now
             result.updated_count += 1
+
+        return dedupe_key
