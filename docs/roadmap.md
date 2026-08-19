@@ -68,20 +68,21 @@ This roadmap defines the intended build order. Phases should generally be comple
 
 **Definition of Done:** A user can load the site, search/filter internships, view details, and click through to the original application link — backed by the live API.
 
-## Phase 5 — Multi-Company Scraping
+## Phase 5 — Multi-Company Scraping (Complete)
 
 **Goal:** Scale the scraping pipeline beyond a single company.
 
-**Note:** A small slice of this phase (Phase 2B) already happened early, as a validation step right after the first scraper: two more Greenhouse companies were added, scraper behavior was standardized into a shared `GreenhouseScraper`, per-listing error isolation was confirmed across companies, and logging summaries were verified against real runs. What remains here is scaling to companies beyond Greenhouse (e.g. Workday) and tracking metrics over time.
+**Note:** A small slice of this phase (Phase 2B) already happened early, as a validation step right after the first scraper: two more Greenhouse companies were added, scraper behavior was standardized into a shared `GreenhouseScraper`, per-listing error isolation was confirmed across companies, and logging summaries were verified against real runs. The rest of this phase's scope (non-Greenhouse ATS support, metrics over time) was completed later — internally tracked as "Phase 7" in project instructions at the time, since it happened after Phase 6 (Automation & Production Deployment) — and went further than this phase's original scope into classification-quality and data-validation hardening driven by the newly-expanded real dataset. See `docs/architecture.md` ("Implementation Notes (Phase 7 — Scraper Expansion & Data Quality)") for full detail.
 
 **Key Tasks:**
-- Add additional company scrapers, including non-Greenhouse ATSs (e.g. Workday, requiring Playwright)
-- ~~Standardize scraper behavior/conventions across companies~~ — done in Phase 2B via `GreenhouseScraper`
-- ~~Add error handling per scraper (isolated failures)~~ — done in `BaseScraper` (Phase 2), confirmed across companies in Phase 2B
+- ~~Add additional company scrapers, including non-Greenhouse ATSs~~ — done: `WorkdayScraper` (Abbott Laboratories) added alongside 4 new Greenhouse companies (Rocket Lab, SpaceX, Red Ventures, SpotHopper), bringing the total to 8 companies across 2 ATS platforms. Workday's public JSON API made Playwright unnecessary here (kept as a dependency for a future ATS without one).
+- ~~Standardize scraper behavior/conventions across companies~~ — done in Phase 2B via `GreenhouseScraper`; extended with `WorkdayScraper` plus shared `http_utils`/`text_utils` modules so both ATS integrations use one retry/backoff policy and one set of cleanup helpers
+- ~~Add error handling per scraper (isolated failures)~~ — done in `BaseScraper` (Phase 2), confirmed across companies in Phase 2B, extended to distinguish fetch/database/per-listing failure classes
 - ~~Add logging~~ — done in `BaseScraper` (Phase 2)
-- Track basic scraping metrics over time (success/failure rate, listings found per run, persisted rather than just logged)
+- ~~Track basic scraping metrics over time~~ — done: a persisted `scraper_runs` table (not just logs) records every run's status, timing, and counts
+- Additional, beyond this phase's original scope: classification-quality fixes (word-boundary matching, a new `Sales` category, broadened technical-role exclusions) and pre-insert data validation, both driven by real false positives/gaps the expanded company set actually surfaced
 
-**Definition of Done:** Multiple company scrapers run independently, failures in one do not affect others, and scraping outcomes are logged and measurable.
+**Definition of Done:** Multiple company scrapers run independently, failures in one do not affect others, and scraping outcomes are logged and measurable. ✅ Verified against production: 8 companies, 2 ATS platforms, persisted `scraper_runs` metrics, zero duplicate `dedupe_key`s.
 
 ## Phase 6 — Automation & Production Deployment (Complete)
 

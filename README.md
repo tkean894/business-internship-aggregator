@@ -24,7 +24,16 @@ An automated pipeline that scrapes company career pages for business-relevant in
 
 ## Current Status
 
-**Deployed to production end-to-end (Phases 1–6 complete).** PostgreSQL schema, SQLAlchemy models, and Alembic migrations are implemented and tested. Scrapers are implemented for three real companies (Robinhood, Cloudflare, Braze — all Greenhouse-hosted) behind a shared, tested `BaseScraper`/`GreenhouseScraper` architecture. A read-only FastAPI backend (search, filtering, pagination, sorting) is implemented and tested against that live data. A Next.js (App Router, TypeScript, Tailwind) frontend consumes that API — search, filters, sorting, pagination, internship and company detail pages. The scraper runs on a schedule via GitHub Actions against a managed production database (see "Live Application" and "Production" below). See `docs/roadmap.md` for the full phase-by-phase build order.
+**Deployed to production, scraping 8 real companies across 2 ATS platforms (Phases 1–7 complete).** PostgreSQL schema, SQLAlchemy models, and Alembic migrations are implemented and tested. A read-only FastAPI backend (search, filtering, pagination, sorting) is implemented and tested against live data. A Next.js (App Router, TypeScript, Tailwind) frontend consumes that API — search, filters, sorting, pagination, internship and company detail pages. The scraper runs on a schedule via GitHub Actions against a managed production database (see "Live Application" and "Production" below). See `docs/roadmap.md` for the full phase-by-phase build order.
+
+## Supported ATS Platforms & Companies
+
+| ATS | Companies |
+|---|---|
+| Greenhouse | Robinhood, Cloudflare, Braze, Rocket Lab, SpaceX, Red Ventures, SpotHopper |
+| Workday | Abbott Laboratories |
+
+Both integrations share the same `BaseScraper` lifecycle (company lookup, dedup, insert/update, inactive-lifecycle handling, per-listing error isolation, scraper-run metrics). A company only ever needs a small config file under `scrapers/companies/` — see "Scraper Architecture" in `docs/architecture.md`.
 
 ## Tech Stack
 
@@ -34,8 +43,9 @@ An automated pipeline that scrapes company career pages for business-relevant in
 | Backend | Python, FastAPI |
 | Database | PostgreSQL |
 | ORM | SQLAlchemy |
-| Scraping | Python, Playwright |
+| Scraping | Python, `requests` (both current ATS integrations expose public JSON APIs; Playwright remains a dependency for a future non-API ATS, per `docs/roadmap.md`) |
 | Automation | GitHub Actions |
+| Testing | pytest |
 | Version Control | Git + GitHub |
 
 This stack is intentionally kept simple and appropriate for a student-built MVP — no Kubernetes, microservices, or big-data infrastructure.
@@ -107,6 +117,11 @@ GET /companies/6
 GET /categories
 ```
 
+**Running tests** (requires the local PostgreSQL setup above — tests run against the local dev database and clean up their own `test-`-prefixed data; external HTTP calls are mocked, so no scraper test depends on a real career site):
+```
+.\.venv\Scripts\python -m pytest tests/ -v
+```
+
 ## Production
 
 ```text
@@ -169,13 +184,18 @@ business-internship-aggregator/
 │   ├── models/         # SQLAlchemy models
 │   └── database/       # DB session, dedupe-key utils, seed data
 ├── scrapers/
-│   ├── companies/      # Company-specific scraper configs (Robinhood, Cloudflare, Braze)
-│   ├── base_scraper.py     # Shared DB/lifecycle logic for all scrapers
+│   ├── companies/      # Per-company scraper configs (see "Supported ATS Platforms" above)
+│   ├── base_scraper.py     # Shared DB/lifecycle/metrics logic for every ATS
 │   ├── greenhouse.py       # Shared Greenhouse ATS fetch/parse logic
+│   ├── workday.py          # Shared Workday ATS fetch/parse logic
 │   ├── classification.py   # Title -> category classification
+│   ├── schemas.py          # NormalizedInternship + pre-insert validation
+│   ├── http_utils.py       # Shared retry/backoff HTTP session
+│   ├── text_utils.py       # Shared HTML/date/location cleanup
 │   └── scheduler.py        # Runs all company scrapers (invoked by GitHub Actions)
 ├── database/           # database/schema.sql (source-of-truth DDL)
 ├── alembic/             # Migrations
+├── tests/               # pytest suite (classification, dedupe, lifecycle, metrics, scheduler)
 ├── docs/                # Product and technical documentation
 └── README.md
 ```
