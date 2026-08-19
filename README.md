@@ -12,11 +12,11 @@ The backend runs on Render's free tier, which spins down after ~15 minutes of in
 
 ## Overview
 
-Business Internship Aggregator is an in-progress platform that automatically discovers and aggregates business-related internship opportunities from company career websites, presenting them in one searchable interface. It is being built as both a portfolio project and a genuinely useful tool for business students.
+Business Internship Aggregator automatically discovers and aggregates business-related internship opportunities from company career websites, presenting them in one searchable, filterable interface. It is being built as both a portfolio project and a genuinely useful tool for business students.
 
 ## Problem
 
-Business students looking for internships in Product Management, Business Analytics, Finance, Accounting, Consulting, Marketing, Operations, Supply Chain, Strategy, or Human Resources have to manually check dozens of individual company career pages, since opportunities are scattered with no central source. Most existing internship aggregators are built for and optimized around software engineering roles, leaving business students underserved.
+Business students looking for internships in Product Management, Business Analytics, Finance, Accounting, Consulting, Marketing, Operations, Supply Chain, Strategy, Sales, Real Estate, or Human Resources have to manually check dozens of individual company career pages, since opportunities are scattered with no central source. Most existing internship aggregators are built for and optimized around software engineering roles, leaving business students underserved.
 
 ## Solution
 
@@ -24,16 +24,17 @@ An automated pipeline that scrapes company career pages for business-relevant in
 
 ## Current Status
 
-**Deployed to production, scraping 8 real companies across 2 ATS platforms (Phases 1–7 complete).** PostgreSQL schema, SQLAlchemy models, and Alembic migrations are implemented and tested. A read-only FastAPI backend (search, filtering, pagination, sorting) is implemented and tested against live data. A Next.js (App Router, TypeScript, Tailwind) frontend consumes that API — search, filters, sorting, pagination, internship and company detail pages. The scraper runs on a schedule via GitHub Actions against a managed production database (see "Live Application" and "Production" below). See `docs/roadmap.md` for the full phase-by-phase build order.
+**Deployed to production, scraping 16 real companies across 3 ATS platforms (Phases 1–8 complete).** PostgreSQL schema, SQLAlchemy models, and Alembic migrations are implemented and tested. A read-only FastAPI backend (search, filtering by category/company/location/industry, pagination, sorting) is implemented and tested against live data. A Next.js (App Router, TypeScript, Tailwind) frontend consumes that API — search, filters, sorting, freshness/"New" indicators, category and company discovery, internship and company detail pages. The scraper runs on a schedule via GitHub Actions against a managed production database (see "Live Application" and "Production" below). See `docs/roadmap.md` for the full phase-by-phase build order.
 
 ## Supported ATS Platforms & Companies
 
 | ATS | Companies |
 |---|---|
 | Greenhouse | Robinhood, Cloudflare, Braze, Rocket Lab, SpaceX, Red Ventures, SpotHopper |
-| Workday | Abbott Laboratories |
+| Workday | Abbott Laboratories, Medtronic, Invesco, AIA, Applied Materials, Chevron, Smucker, Assurant |
+| Lever | HCVT |
 
-Both integrations share the same `BaseScraper` lifecycle (company lookup, dedup, insert/update, inactive-lifecycle handling, per-listing error isolation, scraper-run metrics). A company only ever needs a small config file under `scrapers/companies/` — see "Scraper Architecture" in `docs/architecture.md`.
+All three integrations share the same `BaseScraper` lifecycle (company lookup, dedup, insert/update, inactive-lifecycle handling, per-listing error isolation, scraper-run metrics). A company only ever needs a small config file under `scrapers/companies/` — see "Scraper Architecture" in `docs/architecture.md`. Companies span Technology, Financial Services, Aerospace, Healthcare, Investment Management, Insurance, Manufacturing, Energy, Food & Beverage, and Consulting.
 
 ## Tech Stack
 
@@ -111,6 +112,7 @@ Example API requests:
 ```
 GET /internships?search=marketing&category=Marketing&page=1&page_size=10
 GET /internships?company=Cloudflare&location=London&active=true
+GET /internships?industry=Healthcare&sort=first_seen_desc
 GET /internships/12
 GET /companies
 GET /companies/6
@@ -188,6 +190,7 @@ business-internship-aggregator/
 │   ├── base_scraper.py     # Shared DB/lifecycle/metrics logic for every ATS
 │   ├── greenhouse.py       # Shared Greenhouse ATS fetch/parse logic
 │   ├── workday.py          # Shared Workday ATS fetch/parse logic
+│   ├── lever.py            # Shared Lever ATS fetch/parse logic
 │   ├── classification.py   # Title -> category classification
 │   ├── schemas.py          # NormalizedInternship + pre-insert validation
 │   ├── http_utils.py       # Shared retry/backoff HTTP session

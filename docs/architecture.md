@@ -242,3 +242,44 @@ A new `scraper_runs` table (`backend/models/scraper_run.py`, migration `dfdc7694
 ### Error Handling
 
 `BaseScraper.run()` distinguishes three failure classes, all logged with company/scraper/error-type context and never including secrets: (1) a fetch-level failure (network/HTTP, after `http_utils`' retry policy is exhausted) - the whole company run fails, nothing has been written yet; (2) a database-processing failure (e.g. a constraint violation) - also a hard failure, logged separately since the fetch itself succeeded; (3) a per-listing parse or validation failure - isolated, logged, counted, and skipped without affecting the rest of that company's run. All three record a `scraper_runs` row.
+
+## Implementation Notes (Phase 8 — Dataset Expansion & Product Polish)
+
+Goal: prove the platform's usefulness scales past a thin, tech/aerospace-skewed dataset, and make the frontend feel like an actual discovery product rather than a raw search form.
+
+### ATS Architecture: Lever
+
+```text
+BaseScraper
+├── GreenhouseScraper  (7 companies)
+├── WorkdayScraper     (8 companies)
+└── LeverScraper       (HCVT)
+```
+
+`LeverScraper` (`scrapers/lever.py`) is the platform's third ATS, added only after confirming a real, verified need: HCVT (a tax/accounting/advisory firm) had 12 clean, currently-open Accounting/Consulting internships across distinct offices, with no dedup-collision risk. It uses Lever's own officially documented, unauthenticated Postings API (`api.lever.co/v0/postings/{site}` - see `github.com/lever/postings-api`, maintained by Lever), explicitly designed for public career-site/job-board consumption - architecturally the simplest of the three ATSs, since one request returns a company's entire posting list already (like Greenhouse, unlike Workday's per-job detail requests). A specific access question came up during evaluation and is worth recording: `jobs.lever.co` (Lever's separate hosted-posting-page domain) has a robots.txt rule disallowing `ClaudeBot` specifically, distinct from its generic `Allow: /` for other bots; `api.lever.co` (the only host this scraper ever talks to) carries no such restriction. The distinction was treated as meaningful rather than a loophole - confirmed the Postings API is Lever's own sanctioned public interface (not reverse-engineered), and the scraper never touches `jobs.lever.co` or Lever's separate authenticated OAuth Data API.
+
+### Company Industry Metadata
+
+`Company.industry` (nullable `VARCHAR(100)`, migration `dda83df7adaa`) is free text, not a fixed enum - unlike `internship_category`, the set of industries is expected to grow organically as companies are added, and a rigid taxonomy would need its own migration every time a new industry showed up. Each company config sets `industry` as a class attribute (e.g. `industry = "Healthcare"`); `BaseScraper._get_or_create_company()` sets it on creation and refreshes it on every subsequent run if the config value changes, so the 8 companies that predated this field were backfilled automatically on their next scheduled run rather than needing a one-off data migration script. Exposed via `GET /internships?industry=` (exact match, joined through `Company`) and surfaced in `CompanySummary`/`CompanyOut` - no new endpoint was added; the frontend derives its industry filter options from the existing `GET /companies` response.
+
+### Classification: Real Estate Category and Further Refinements
+
+All changes here were driven by titles actually observed from the 8 new companies, following the same evidence-based bar as Phase 7:
+
+- **New `Real Estate` category** - Invesco's recurring "Early Career Intern - Real Estate (Equity & Credit)" postings, explicitly suggested as a candidate category in this phase's own task definition and backed by real, repeated volume.
+- **Finance keywords**: `investment(s)`, `risk`, `actuarial`, `equity`/`equities` - Invesco (investment management) and AIA (insurance/actuarial) postings that don't fit any other category cleanly enough to justify their own new category yet (too little distinct volume, per the "only add a category if there are enough real postings" rule applied in Phase 7).
+- **Accounting keyword**: `tax` - HCVT's Tax/International Tax/State and Local Tax internships.
+- **A real regex bug, found by testing**: Medtronic's "Cardiovascular _Marketing Intern" (a stray underscore from a messy ATS export) did not match `\bmarketing\b`, because regex word-boundaries treat `_` as a word character - the character immediately before "marketing" was never a boundary. Fixed by normalizing separator punctuation (`_`, `/`) to spaces before matching (`_normalize_for_matching` in `classification.py`), rather than special-casing this one title.
+- **Broadened technical exclusions** per this phase's explicit list: `mechanical engineer`, `electrical engineer`, `computer engineer`, `embedded engineer`/`embedded systems`, `cyber security`, `it intern`.
+- **The Phase 7 dedup-collision handling was exercised for real, repeatedly**: AIA and Medtronic both post multiple identical-title-and-location openings (e.g. AIA's "Intern, Testing" appears 4 times at the same Kuala Lumpur office). Each collision was skipped and logged exactly as designed - confirmed this generalizes beyond the single Rocket Lab case that originally motivated it, not a new bug.
+- **`Other` is 48/118 active internships (~41%) in production as of this phase** - slightly higher than Phase 7's 34%, not lower, despite the additions above. This is disclosed rather than smoothed over: AIA and Medtronic between them contribute a large volume of generically- or internally-titled international postings (e.g. "Agency, Intern", "Intern, Process Transformation", "NMPH Operation Intern") that are genuinely ambiguous - forcing them into a specific category to shrink the `Other` percentage would violate the platform's own stated principle against forced classification.
+
+### Freshness
+
+Two different timestamps answer two different questions, and the platform is deliberately careful never to conflate them (Phase 8 Step 9's core requirement): `Internship.posted_date` is the source's own claim about when the role went live (not every ATS provides one - Workday's job detail response omits an application deadline entirely, for instance, and some sources' dates are approximate); `Internship.first_seen_at` is strictly this aggregator's own observation - when a scraper run first inserted the row, never adjustable by source data. `frontend/lib/format.ts`'s `freshnessLabel()` shows "Posted X ago" when a real `posted_date` exists, and falls back to "Discovered X ago" (from `first_seen_at`) only when it doesn't - the copy itself signals which kind of date is being shown, so a listing missing a source date is never presented as if the platform knew when it was actually posted. The "New" badge (`isNewlyDiscovered()`) is intentionally always based on `first_seen_at` (≤ 7 days), not `posted_date`, since discovery time is the one signal every listing always has regardless of source data quality.
+
+### Frontend / Product
+
+All additions reuse the existing `frontend/lib/api.ts` client and existing endpoints - no new client-side data-fetching pattern, no new Client Components beyond extending the two that already existed (`FilterPanel`, `SortSelect`). The homepage's "Recently Added" section and its live stats line are the only genuinely new API-facing behavior: stats are derived from data already fetched for the filter panel (summing `active_internship_count` across `GET /companies`' response, and `categories.length` from the existing `GET /categories` call) rather than issuing an extra request, and "Recently Added" (`GET /internships?sort=first_seen_desc`) is only fetched on the unfiltered homepage view, not while a user is mid-search, per the "avoid unnecessary requests" principle in this phase's own instructions. Category-pill and company-list "discovery" (`/companies`, a new Server Component page) both link back into the existing `?category=`/detail-page query-param filtering rather than introducing parallel pages or endpoints.
+
+**Responsive design and accessibility**: reviewed via the rendered HTML and Tailwind utility classes actually present (no obvious layout overflow, `flex-wrap` used throughout the filter/pill rows, existing `sm:`/mobile-first breakpoints extended consistently to new elements) and via `sr-only` labels on every new form control (the industry `<select>` follows the exact pattern of the existing category/company selects). No visual browser-based testing was performed or claimed - this environment has no browser - consistent with how Phase 4's original frontend work was verified (`curl` against real rendered output only).

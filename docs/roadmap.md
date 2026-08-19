@@ -102,7 +102,23 @@ This phase grew from its original scope (automation only) to include full produc
 
 **Definition of Done:** Internship data refreshes automatically on a schedule without manual intervention, with visibility into failures, **and** the application is publicly accessible end-to-end (Career Sites → Scrapers → GitHub Actions → Neon → FastAPI → Next.js → User) — verified live, not just locally.
 
-## Phase 7 — Product Features
+## Phase 7 — Dataset Expansion & Product Polish (Complete)
+
+**Goal:** Increase the platform's actual usefulness (dataset breadth, industry diversity, discoverability) before layering on accounts/notifications/AI - this phase didn't exist in the original Phase 0-8 plan above; it was inserted here (renumbering the two phases that follow) once Phase 5/6's completion made clear that dataset depth and product usability, not new infrastructure, were the real gap.
+
+**Key Tasks:**
+- ~~Expand the company dataset~~ — done: 8 → 16 companies (Greenhouse: 7, Workday: 8, Lever: 1), each individually verified for real, currently-open business-relevant postings, reaching 118 active internships (target was 100+)
+- ~~Expand industry diversity~~ — done: Technology, Financial Services, Aerospace, Healthcare, Investment Management, Insurance, Manufacturing, Energy, Food & Beverage, Consulting (was tech/aerospace-only)
+- ~~Expand ATS coverage where justified~~ — done: Lever added (`scrapers/lever.py`), justified by a real, verified company (HCVT) rather than added for architectural completeness alone
+- ~~Add company industry metadata~~ — done (`Company.industry`, migration `dda83df7adaa`)
+- ~~Improve classification~~ — done: new Real Estate category, several Finance/Accounting keyword additions, a real regex bug fix (underscore word-boundary), broadened technical exclusions - all driven by real observed titles, not speculative
+- ~~Improve freshness visibility~~ — done: `posted_date`-vs-`first_seen_at` distinction surfaced honestly throughout the frontend, "New" badge
+- ~~Improve search/filter UX~~ — done: industry filter, `first_seen_desc` sort, category-pill and company-list discovery pages
+- ~~Improve homepage/product presentation~~ — done: hero copy, live stats, "Recently Added" section, contextual empty states
+
+**Definition of Done:** ✅ A substantially broader, more diverse dataset (verified against production: 16 companies, 118 active internships, 10 industries), improved classification accuracy on real data, and a frontend that functions as an actual discovery product rather than a raw search form — all without accounts, saved jobs, notifications, or AI.
+
+## Phase 8 — Product Features
 
 **Goal:** Add user-facing product depth beyond the core MVP.
 
@@ -114,7 +130,7 @@ This phase grew from its original scope (automation only) to include full produc
 
 **Definition of Done:** Users can create accounts, save internships, receive notifications, and track application status — layered on top of the working MVP.
 
-## Phase 8 — Intelligence
+## Phase 9 — Intelligence
 
 **Goal:** Add AI-assisted features once the platform has real usage and data.
 
