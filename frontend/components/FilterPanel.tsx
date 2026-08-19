@@ -3,6 +3,8 @@
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useTransition } from "react";
 
+import { CANADA_LOCATION_FILTER_VALUE, US_LOCATION_FILTER_VALUE } from "@/lib/location";
+
 interface FilterPanelProps {
   categories: string[];
   companies: string[];
@@ -129,11 +131,17 @@ export default function FilterPanel({
             className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-slate-500 focus:outline-none focus:ring-2 focus:ring-slate-200"
           >
             <option value="">All locations</option>
-            {locations.map((loc) => (
-              <option key={loc} value={loc}>
-                {loc}
-              </option>
-            ))}
+            <optgroup label="Country">
+              <option value={US_LOCATION_FILTER_VALUE}>United States</option>
+              <option value={CANADA_LOCATION_FILTER_VALUE}>Canada</option>
+            </optgroup>
+            <optgroup label="Specific location">
+              {locations.map((loc) => (
+                <option key={loc} value={loc}>
+                  {loc}
+                </option>
+              ))}
+            </optgroup>
           </select>
         </div>
       )}

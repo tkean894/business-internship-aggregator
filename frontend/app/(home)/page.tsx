@@ -8,7 +8,14 @@ import Pagination from "@/components/Pagination";
 import SearchBar from "@/components/SearchBar";
 import SortSelect from "@/components/SortSelect";
 import { getAllInternships, getCategories, getCompanies } from "@/lib/api";
-import { isUsOrCanadaLocation } from "@/lib/location";
+import {
+  CANADA_LOCATION_FILTER_VALUE,
+  isCanadaLocation,
+  isUsLocation,
+  isUsOrCanadaLocation,
+  locationFilterLabel,
+  US_LOCATION_FILTER_VALUE,
+} from "@/lib/location";
 import type { InternshipCategory, InternshipSort } from "@/lib/types";
 
 const PAGE_SIZE = 12;
@@ -36,11 +43,36 @@ export default async function HomePage({ searchParams }: HomePageProps) {
 
   const hasActiveFilters = Boolean(search || category || company || location || industry);
 
+  // "United States"/"Canada" are reserved dropdown values, not real
+  // location strings (see lib/location.ts) - the backend's `location`
+  // filter does a plain ILIKE substring match, which can't express "any
+  // US location" (most real values are "City, ST", never the literal
+  // words "United States"). For these two, skip the backend-level
+  // narrowing entirely and filter by country client-side instead, same
+  // as the general US/Canada display filter already does below.
+  const isCountryFilter = location === US_LOCATION_FILTER_VALUE || location === CANADA_LOCATION_FILTER_VALUE;
+  const backendLocation = isCountryFilter ? undefined : location;
+  const displayFilter =
+    location === US_LOCATION_FILTER_VALUE
+      ? isUsLocation
+      : location === CANADA_LOCATION_FILTER_VALUE
+        ? isCanadaLocation
+        : isUsOrCanadaLocation;
+  // The "N ... internships found" count below reflects whichever filter
+  // is active, so its label should too - "US & Canada-based" is
+  // misleading directly under a result set that's actually Canada-only.
+  const foundLabel =
+    location === US_LOCATION_FILTER_VALUE
+      ? "US-based"
+      : location === CANADA_LOCATION_FILTER_VALUE
+        ? "Canada-based"
+        : "US & Canada-based";
+
   const { getToken } = await auth();
   const token = await getToken();
 
   const [allMatchingInternships, categoriesRes, companiesRes] = await Promise.all([
-    getAllInternships({ search, category, company, location, industry, sort, active: true }, token),
+    getAllInternships({ search, category, company, location: backendLocation, industry, sort, active: true }, token),
     getCategories(),
     getCompanies(),
   ]);
@@ -52,8 +84,11 @@ export default async function HomePage({ searchParams }: HomePageProps) {
   // pages have real matches (a real bug: see git history).
   // getAllInternships() fetches every internship matching the current
   // search/filters up front so filtering and pagination can both be
-  // computed correctly here.
-  const naInternships = allMatchingInternships.filter((item) => isUsOrCanadaLocation(item.location));
+  // computed correctly here. Uses `displayFilter` (isUsLocation-only /
+  // isCanadaLocation-only / the general union) rather than always the
+  // union, so picking "United States" actually excludes Canada and
+  // vice versa.
+  const naInternships = allMatchingInternships.filter((item) => displayFilter(item.location));
   const totalNaInternships = naInternships.length;
   const visibleItems = naInternships.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
@@ -82,7 +117,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
       : industry
         ? `in ${industry}`
         : location
-          ? `in ${location}`
+          ? `in ${locationFilterLabel(location)}`
           : undefined;
 
   return (
@@ -135,7 +170,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
       </div>
 
       <p className="mb-4 text-sm text-slate-500">
-        {totalNaInternships} US &amp; Canada-based internship{totalNaInternships === 1 ? "" : "s"} found
+        {totalNaInternships} {foundLabel} internship{totalNaInternships === 1 ? "" : "s"} found
       </p>
 
       {visibleItems.length === 0 ? (
