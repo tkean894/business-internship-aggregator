@@ -83,17 +83,23 @@ This roadmap defines the intended build order. Phases should generally be comple
 
 **Definition of Done:** Multiple company scrapers run independently, failures in one do not affect others, and scraping outcomes are logged and measurable.
 
-## Phase 6 — Automation
+## Phase 6 — Automation & Production Deployment (Complete)
 
-**Goal:** Remove the need to manually trigger scraping.
+**Goal:** Remove the need to manually trigger scraping, and make the application publicly accessible.
+
+This phase grew from its original scope (automation only) to include full production deployment, since automated scraping is only meaningful against a live, publicly reachable application. See `docs/architecture.md` ("Production Architecture") and the README's "Live Application" / "Production" sections for full detail.
 
 **Key Tasks:**
-- Configure scheduled scraping via `scheduler.py`
-- Set up GitHub Actions workflow to run scraping on a schedule
-- Ensure scraped data automatically updates PostgreSQL
-- Add basic monitoring/alerting for failed runs
+- ~~Configure scheduled scraping via `scheduler.py`~~ — done; also added per-company error isolation and inactive-listing lifecycle detection (previously missing despite being listed as complete)
+- ~~Set up GitHub Actions workflow to run scraping on a schedule~~ — done (`.github/workflows/scraper.yml`, every 6h + manual `workflow_dispatch`)
+- ~~Ensure scraped data automatically updates PostgreSQL~~ — done, against a managed production database (Neon)
+- ~~Add basic monitoring/alerting for failed runs~~ — GitHub Actions run status/logs and Render's deploy/service logs serve this at MVP scale; no paid monitoring platform added
+- Deploy managed PostgreSQL (Neon), FastAPI (Render), and Next.js (Vercel)
+- Apply production schema via Alembic only (no manual DDL) and populate real scraped data
+- Restrict production CORS to the deployed frontend origin (no wildcard)
+- Verify security posture: no secrets committed (checked across full git history), `.env` files gitignored, credentials stored only as Render/Vercel/GitHub Actions environment configuration
 
-**Definition of Done:** Internship data refreshes automatically on a schedule without manual intervention, with visibility into failures.
+**Definition of Done:** Internship data refreshes automatically on a schedule without manual intervention, with visibility into failures, **and** the application is publicly accessible end-to-end (Career Sites → Scrapers → GitHub Actions → Neon → FastAPI → Next.js → User) — verified live, not just locally.
 
 ## Phase 7 — Product Features
 

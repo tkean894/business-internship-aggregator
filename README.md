@@ -1,5 +1,15 @@
 # Business Internship Aggregator
 
+## Live Application
+
+| | URL |
+|---|---|
+| Frontend | https://business-internship-aggregator.vercel.app |
+| Backend API | https://business-internship-aggregator-api.onrender.com |
+| API Docs (Swagger) | https://business-internship-aggregator-api.onrender.com/docs |
+
+The backend runs on Render's free tier, which spins down after ~15 minutes of inactivity — the first request after a quiet period can take 30-50 seconds while it cold-starts. Subsequent requests are fast.
+
 ## Overview
 
 Business Internship Aggregator is an in-progress platform that automatically discovers and aggregates business-related internship opportunities from company career websites, presenting them in one searchable interface. It is being built as both a portfolio project and a genuinely useful tool for business students.
@@ -14,7 +24,7 @@ An automated pipeline that scrapes company career pages for business-relevant in
 
 ## Current Status
 
-**Full stack MVP working end-to-end (Phases 1–4 complete).** PostgreSQL schema, SQLAlchemy models, and Alembic migrations are implemented and tested. Scrapers are implemented for three real companies (Robinhood, Cloudflare, Braze — all Greenhouse-hosted) behind a shared, tested `BaseScraper`/`GreenhouseScraper` architecture, with 9 real internship records currently stored. A read-only FastAPI backend (search, filtering, pagination, sorting) is implemented and tested against that live data. A Next.js (App Router, TypeScript, Tailwind) frontend consumes that API — search, filters, sorting, pagination, internship and company detail pages — tested against the live backend. See `docs/roadmap.md` for the full phase-by-phase build order.
+**Deployed to production end-to-end (Phases 1–6 complete).** PostgreSQL schema, SQLAlchemy models, and Alembic migrations are implemented and tested. Scrapers are implemented for three real companies (Robinhood, Cloudflare, Braze — all Greenhouse-hosted) behind a shared, tested `BaseScraper`/`GreenhouseScraper` architecture. A read-only FastAPI backend (search, filtering, pagination, sorting) is implemented and tested against that live data. A Next.js (App Router, TypeScript, Tailwind) frontend consumes that API — search, filters, sorting, pagination, internship and company detail pages. The scraper runs on a schedule via GitHub Actions against a managed production database (see "Live Application" and "Production" below). See `docs/roadmap.md` for the full phase-by-phase build order.
 
 ## Tech Stack
 
@@ -54,7 +64,7 @@ Company Career Websites
 
 Full details, including component responsibilities and data flow, are documented in [`docs/architecture.md`](docs/architecture.md).
 
-## Running Locally
+## Local Development
 
 Requires PostgreSQL, Python 3.12+, and Node.js 20.9+ (LTS) installed locally.
 
@@ -97,6 +107,35 @@ GET /companies/6
 GET /categories
 ```
 
+## Production
+
+```text
+Career Sites
+     ↓
+  Scrapers
+     ↓
+GitHub Actions (scheduled + manual)
+     ↓
+Managed PostgreSQL (Neon)
+     ↓
+   FastAPI (Render)
+     ↓
+   Next.js (Vercel)
+     ↓
+    User
+```
+
+| Layer | Provider | Notes |
+|---|---|---|
+| Database | [Neon](https://neon.tech) | Managed serverless Postgres, free tier. Schema created via `alembic upgrade head`, never manual DDL. |
+| Backend | [Render](https://render.com) | Free Web Service, deployed via `render.yaml` (Blueprint). Start command runs `alembic upgrade head` before `uvicorn` on every deploy, so schema changes ship automatically. No `--reload`, no debug mode. |
+| Frontend | [Vercel](https://vercel.com) | Auto-deploys `frontend/` on push to `main`. |
+| Scraper automation | GitHub Actions (`.github/workflows/scraper.yml`) | Runs on a 6-hour schedule and via manual `workflow_dispatch`. Applies migrations, then runs `python -m scrapers.scheduler`, which runs every company scraper with per-company error isolation. |
+
+**Environment separation**: local development uses `.env` (backend) / `frontend/.env.local` (frontend), both gitignored and never committed. Production configuration lives entirely in Render's environment variables, Vercel's environment variables, and GitHub Actions repository secrets — never in source. `DATABASE_URL` in particular is a GitHub Actions secret (used by the scraper workflow) and a Render environment variable (used by the API) — the two are separate configuration surfaces pointing at the same managed database, and neither value is ever logged or committed.
+
+**CORS**: `CORS_ALLOWED_ORIGINS` on Render is a comma-separated allowlist (currently local dev + the production Vercel URL) — never a wildcard.
+
 ## Planned MVP Features
 
 - Automated internship collection from company career sites
@@ -134,7 +173,7 @@ business-internship-aggregator/
 │   ├── base_scraper.py     # Shared DB/lifecycle logic for all scrapers
 │   ├── greenhouse.py       # Shared Greenhouse ATS fetch/parse logic
 │   ├── classification.py   # Title -> category classification
-│   └── scheduler.py        # Not yet built (Phase 6)
+│   └── scheduler.py        # Runs all company scrapers (invoked by GitHub Actions)
 ├── database/           # database/schema.sql (source-of-truth DDL)
 ├── alembic/             # Migrations
 ├── docs/                # Product and technical documentation
