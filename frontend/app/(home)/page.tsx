@@ -33,6 +33,8 @@ export default async function HomePage({ searchParams }: HomePageProps) {
   const sort = (first(rawParams.sort) as InternshipSort | undefined) ?? "posted_date_desc";
   const page = Number(first(rawParams.page) ?? "1") || 1;
 
+  const hasActiveFilters = Boolean(search || category || company || location || industry);
+
   const [allMatchingInternships, categoriesRes, companiesRes] = await Promise.all([
     getAllInternships({ search, category, company, location, industry, sort, active: true }),
     getCategories(),
@@ -50,9 +52,17 @@ export default async function HomePage({ searchParams }: HomePageProps) {
   const totalUsInternships = usInternships.length;
   const visibleItems = usInternships.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
-  // Derived from data already fetched for the filter panel - no extra
-  // API request needed for the hero stat.
-  const totalActiveInternships = companiesRes.items.reduce((sum, c) => sum + c.active_internship_count, 0);
+  // Platform-wide USA-based total for the hero stat, independent of
+  // whatever search/filters are currently applied - this used to sum
+  // `active_internship_count` across every company (unfiltered by
+  // location), which didn't match the actually-USA-filtered results
+  // below and looked like a bug (e.g. "118 active internships" next to
+  // a page of 41). With no filters active, `usInternships` already IS
+  // the platform-wide set, so this only issues a second request when a
+  // filter is actually narrowing the results.
+  const platformWideUsInternships = hasActiveFilters
+    ? (await getAllInternships({ active: true })).filter((item) => isUsLocation(item.location)).length
+    : totalUsInternships;
   const industries = Array.from(new Set(companiesRes.items.map((c) => c.industry).filter((i): i is string => Boolean(i)))).sort();
 
   const emptyStateContext = category
@@ -73,7 +83,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
           Search internships across finance, consulting, marketing, analytics, operations, product, and more.
         </p>
         <p className="mt-3 text-sm text-slate-500">
-          {totalActiveInternships} active internship{totalActiveInternships === 1 ? "" : "s"} across{" "}
+          {platformWideUsInternships} active US-based internship{platformWideUsInternships === 1 ? "" : "s"} across{" "}
           {companiesRes.total} compan{companiesRes.total === 1 ? "y" : "ies"} and {categoriesRes.categories.length}{" "}
           categories.
         </p>
