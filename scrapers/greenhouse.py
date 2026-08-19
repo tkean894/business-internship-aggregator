@@ -1,20 +1,14 @@
 from __future__ import annotations
 
-import html
 import logging
-from datetime import date, datetime
-
-import requests
-from bs4 import BeautifulSoup
 
 from scrapers.base_scraper import BaseScraper
 from scrapers.classification import classify_internship
+from scrapers.http_utils import REQUEST_TIMEOUT_SECONDS, new_session
 from scrapers.schemas import NormalizedInternship
+from scrapers.text_utils import clean_html_description, normalize_location, parse_date_safe
 
 logger = logging.getLogger(__name__)
-
-REQUEST_HEADERS = {"User-Agent": "BusinessInternshipAggregator/0.1 (educational project)"}
-REQUEST_TIMEOUT_SECONDS = 30
 
 
 class GreenhouseScraper(BaseScraper):
@@ -38,7 +32,8 @@ class GreenhouseScraper(BaseScraper):
 
     def fetch_raw_listings(self) -> list[dict]:
         url = f"https://boards-api.greenhouse.io/v1/boards/{self.board_token}/jobs?content=true"
-        response = requests.get(url, headers=REQUEST_HEADERS, timeout=REQUEST_TIMEOUT_SECONDS)
+        session = new_session()
+        response = session.get(url, timeout=REQUEST_TIMEOUT_SECONDS)
         response.raise_for_status()
         return response.json()["jobs"]
 
@@ -51,13 +46,13 @@ class GreenhouseScraper(BaseScraper):
 
         return NormalizedInternship(
             title=title,
-            description=_clean_description(raw.get("content")),
+            description=clean_html_description(raw.get("content")),
             category=category,
-            location=_extract_location(raw),
+            location=normalize_location(_extract_location(raw)),
             application_url=raw["absolute_url"],
             source_url=raw["absolute_url"],
-            posted_date=_parse_date(raw.get("first_published")),
-            application_deadline=_parse_date(raw.get("application_deadline")),
+            posted_date=parse_date_safe(raw.get("first_published")),
+            application_deadline=parse_date_safe(raw.get("application_deadline")),
         )
 
 
@@ -77,23 +72,3 @@ def _extract_location(raw: dict) -> str | None:
     if raw_location and raw_location.get("name"):
         return raw_location["name"].strip()
     return None
-
-
-def _clean_description(raw_content: str | None) -> str | None:
-    """Greenhouse's `content` field is HTML, itself HTML-entity-escaped
-    (e.g. literal "&lt;div&gt;"). Unescape once, then strip tags."""
-    if not raw_content:
-        return None
-    unescaped = html.unescape(raw_content)
-    text = BeautifulSoup(unescaped, "html.parser").get_text(separator=" ", strip=True)
-    return text or None
-
-
-def _parse_date(value: str | None) -> date | None:
-    if not value:
-        return None
-    try:
-        return datetime.fromisoformat(value).date()
-    except ValueError:
-        logger.warning("Could not parse date value: %r", value)
-        return None

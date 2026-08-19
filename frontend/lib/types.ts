@@ -11,6 +11,7 @@ export type InternshipCategory =
   | "Supply Chain"
   | "Strategy"
   | "Human Resources"
+  | "Sales"
   | "Other";
 
 export type InternshipSort = "posted_date_desc" | "last_seen_desc" | "company_name_asc" | "title_asc";

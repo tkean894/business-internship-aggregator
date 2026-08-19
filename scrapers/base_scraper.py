@@ -9,8 +9,8 @@ from sqlalchemy.orm import Session
 
 from backend.database.session import SessionLocal
 from backend.database.utils import compute_dedupe_key
-from backend.models import Company, Internship
-from scrapers.schemas import NormalizedInternship
+from backend.models import Company, Internship, ScraperRun, ScraperRunStatus
+from scrapers.schemas import NormalizedInternship, validate_normalized_internship
 
 logger = logging.getLogger(__name__)
 
@@ -76,58 +76,149 @@ class BaseScraper(abc.ABC):
 
     def run(self) -> ScraperRunResult:
         result = ScraperRunResult(company_slug=self.company_slug)
+        started_at = datetime.now(timezone.utc)
         logger.info("Starting scraper: %s", self.company_slug)
 
         self.setup()
         try:
-            raw_listings = self.fetch_raw_listings()
+            try:
+                raw_listings = self.fetch_raw_listings()
+            except Exception as exc:
+                # A network/HTTP failure fetching the list itself (after
+                # http_utils' own retry/backoff has already been
+                # exhausted) is a hard failure for this company's run -
+                # nothing has been written yet, so no data is at risk.
+                logger.error("%s: failed to fetch listings (%s): %s", self.company_slug, type(exc).__name__, exc)
+                self._record_run(result, started_at, ScraperRunStatus.FAILED, error_message=str(exc)[:2000])
+                raise
             result.raw_count = len(raw_listings)
             logger.info("%s: fetched %d raw listings", self.company_slug, result.raw_count)
 
-            session = SessionLocal()
             try:
-                company = self._get_or_create_company(session)
-                seen_dedupe_keys: set[str] = set()
+                session = SessionLocal()
+                try:
+                    company = self._get_or_create_company(session)
+                    seen_dedupe_keys: set[str] = set()
 
-                for raw in raw_listings:
-                    try:
-                        parsed = self.parse_listing(raw)
-                    except Exception as exc:  # noqa: BLE001 - isolate one bad listing from the rest of the run
-                        result.error_count += 1
-                        result.errors.append(str(exc))
-                        logger.warning("%s: failed to parse a listing: %s", self.company_slug, exc)
-                        continue
+                    for raw in raw_listings:
+                        try:
+                            parsed = self.parse_listing(raw)
+                        except Exception as exc:  # noqa: BLE001 - isolate one bad listing from the rest of the run
+                            result.error_count += 1
+                            result.errors.append(f"parse error: {exc}")
+                            logger.warning("%s: failed to parse a listing: %s", self.company_slug, exc)
+                            continue
 
-                    if parsed is None:
-                        result.skipped_count += 1
-                        continue
+                        if parsed is None:
+                            result.skipped_count += 1
+                            continue
 
-                    result.relevant_count += 1
-                    dedupe_key = self._upsert_internship(session, company, parsed, result)
-                    seen_dedupe_keys.add(dedupe_key)
+                        problems = validate_normalized_internship(parsed)
+                        if problems:
+                            result.error_count += 1
+                            result.errors.append(f"validation failed for {parsed.title!r}: {'; '.join(problems)}")
+                            logger.warning(
+                                "%s: rejected invalid listing %r: %s", self.company_slug, parsed.title, "; ".join(problems)
+                            )
+                            continue
 
-                # A listing still in the DB as active but absent from this
-                # run's raw listings is no longer posted - mark it inactive
-                # rather than deleting (historical data stays queryable).
-                # Only runs here if fetch_raw_listings() succeeded above, so
-                # a scraper that fails outright never wipes out its company's
-                # listings.
-                stale_query = session.query(Internship).filter_by(company_id=company.id, is_active=True)
-                if seen_dedupe_keys:
-                    stale_query = stale_query.filter(~Internship.dedupe_key.in_(seen_dedupe_keys))
-                still_active = stale_query.all()
-                for internship in still_active:
-                    internship.is_active = False
-                    result.deactivated_count += 1
+                        dedupe_key = compute_dedupe_key(company.id, parsed.title, parsed.location)
+                        if dedupe_key in seen_dedupe_keys:
+                            # Two DIFFERENT postings from this same run
+                            # produced the same dedupe_key - i.e. identical
+                            # title + location, a known, documented
+                            # limitation of this hashing strategy (see
+                            # "Deduplication Strategy" in database/schema.sql).
+                            # Observed for real with Rocket Lab, which runs
+                            # two distinct "Business Analyst Intern - Supply
+                            # Chain" reqs at the same office. There is no way
+                            # to tell them apart from title+location alone,
+                            # so the second is skipped (not silently - logged
+                            # and counted) rather than crashing the whole
+                            # company's run on a unique-constraint violation.
+                            result.error_count += 1
+                            result.errors.append(
+                                f"duplicate dedupe_key within this run for {parsed.title!r} at "
+                                f"{parsed.location!r} - cannot distinguish from another listing with "
+                                f"the same title+location; skipped"
+                            )
+                            logger.warning(
+                                "%s: skipping listing with title+location matching another listing "
+                                "in this run: %r at %r", self.company_slug, parsed.title, parsed.location
+                            )
+                            continue
 
-                session.commit()
-            finally:
-                session.close()
+                        result.relevant_count += 1
+                        self._upsert_internship(session, company, parsed, result, dedupe_key)
+                        seen_dedupe_keys.add(dedupe_key)
+
+                    # A listing still in the DB as active but absent from this
+                    # run's raw listings is no longer posted - mark it inactive
+                    # rather than deleting (historical data stays queryable).
+                    # Only runs here if fetch_raw_listings() succeeded above, so
+                    # a scraper that fails outright never wipes out its company's
+                    # listings.
+                    stale_query = session.query(Internship).filter_by(company_id=company.id, is_active=True)
+                    if seen_dedupe_keys:
+                        stale_query = stale_query.filter(~Internship.dedupe_key.in_(seen_dedupe_keys))
+                    still_active = stale_query.all()
+                    for internship in still_active:
+                        internship.is_active = False
+                        result.deactivated_count += 1
+
+                    session.commit()
+                finally:
+                    session.close()
+            except Exception as exc:
+                # Fetch succeeded but something in DB processing failed
+                # (e.g. a constraint violation, a lost connection mid-run).
+                # Treated as a hard failure too - upstream callers (the
+                # scheduler) should know this company's data may be stale.
+                logger.error("%s: database processing failed (%s): %s", self.company_slug, type(exc).__name__, exc)
+                self._record_run(result, started_at, ScraperRunStatus.FAILED, error_message=str(exc)[:2000])
+                raise
         finally:
             self.teardown()
 
+        self._record_run(result, started_at, ScraperRunStatus.SUCCESS, error_message=None)
         logger.info(result.summary())
         return result
+
+    def _record_run(
+        self,
+        result: ScraperRunResult,
+        started_at: datetime,
+        status: ScraperRunStatus,
+        error_message: str | None,
+    ) -> None:
+        """Persist this run's outcome (Phase 7, Step 8). Uses its own
+        short-lived session, independent of the main working session
+        above, so a run's metrics are still recorded even when that
+        session was never opened (a fetch failure) or already closed."""
+        session = SessionLocal()
+        try:
+            session.add(
+                ScraperRun(
+                    company_slug=self.company_slug,
+                    scraper_name=type(self).__name__,
+                    started_at=started_at,
+                    completed_at=datetime.now(timezone.utc),
+                    status=status,
+                    raw_count=result.raw_count,
+                    relevant_count=result.relevant_count,
+                    created_count=result.created_count,
+                    updated_count=result.updated_count,
+                    deactivated_count=result.deactivated_count,
+                    skipped_count=result.skipped_count,
+                    error_count=result.error_count,
+                    error_message=error_message,
+                )
+            )
+            session.commit()
+        except Exception:  # noqa: BLE001 - recording metrics must never mask the original failure
+            logger.exception("%s: failed to record scraper_runs row", self.company_slug)
+        finally:
+            session.close()
 
     def _get_or_create_company(self, session: Session) -> Company:
         company = session.query(Company).filter_by(slug=self.company_slug).one_or_none()
@@ -149,8 +240,8 @@ class BaseScraper(abc.ABC):
         company: Company,
         parsed: NormalizedInternship,
         result: ScraperRunResult,
-    ) -> str:
-        dedupe_key = compute_dedupe_key(company.id, parsed.title, parsed.location)
+        dedupe_key: str,
+    ) -> None:
         existing = session.query(Internship).filter_by(dedupe_key=dedupe_key).one_or_none()
         now = datetime.now(timezone.utc)
 
@@ -184,5 +275,3 @@ class BaseScraper(abc.ABC):
             existing.is_active = True
             existing.last_seen_at = now
             result.updated_count += 1
-
-        return dedupe_key

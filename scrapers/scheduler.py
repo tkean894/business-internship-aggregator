@@ -14,9 +14,14 @@ import logging
 import sys
 
 from scrapers.base_scraper import BaseScraper
+from scrapers.companies.abbott import AbbottScraper
 from scrapers.companies.braze import BrazeScraper
 from scrapers.companies.cloudflare import CloudflareScraper
+from scrapers.companies.redventures import RedVenturesScraper
 from scrapers.companies.robinhood import RobinhoodScraper
+from scrapers.companies.rocketlab import RocketLabScraper
+from scrapers.companies.spacex import SpaceXScraper
+from scrapers.companies.spothopper import SpotHopperScraper
 
 logger = logging.getLogger(__name__)
 
@@ -26,6 +31,11 @@ SCRAPERS: list[type[BaseScraper]] = [
     RobinhoodScraper,
     CloudflareScraper,
     BrazeScraper,
+    RocketLabScraper,
+    SpaceXScraper,
+    RedVenturesScraper,
+    SpotHopperScraper,
+    AbbottScraper,
 ]
 
 
