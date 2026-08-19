@@ -88,22 +88,34 @@ const FETCH_ALL_SAFETY_CAP = 5; // stop after 500 items regardless of `total`
  * has to run over the *filtered* set, which means having the whole
  * matching set in hand first.
  *
- * This is only safe at the platform's current scale (~100-200 active
- * internships, confirmed sub-second responses) - if the active dataset
- * grows into the thousands, replace this (and the client-side location
- * filter it supports) with a real backend-level location/country
- * filter instead of fetching everything per request.
+ * Fetches page 1 first (the only way to learn `total`), then fetches
+ * any remaining needed pages (up to FETCH_ALL_SAFETY_CAP) concurrently
+ * rather than one-at-a-time. This was originally a fully sequential
+ * loop; once the active dataset crossed ~200 (Phase 10 Step 2, mostly
+ * from one company's large board) an unfiltered homepage visit started
+ * needing all 5 capped pages, and 5 sequential requests measured ~6.5s
+ * against the live API even fully warm - a real, reported "Unable to
+ * load internships" failure, not a hypothetical one, especially with
+ * a filtered search triggering a *second* full fetch on top of that
+ * (see the platform-wide-stat call in app/(home)/page.tsx) or a cold
+ * Render instance adding 30-50s to the first request alone. Fetching
+ * concurrently doesn't help a cold first request, but cuts the warm,
+ * many-page case from ~5x a single request's latency to ~2x.
  */
 export async function getAllInternships(
   query: Omit<InternshipQuery, "page" | "page_size">,
   token?: string | null,
 ): Promise<InternshipOut[]> {
-  const items: InternshipOut[] = [];
-  for (let page = 1; page <= FETCH_ALL_SAFETY_CAP; page++) {
-    const res = await getInternships({ ...query, page, page_size: FETCH_ALL_PAGE_SIZE }, token);
-    items.push(...res.items);
-    if (items.length >= res.total || res.items.length === 0) break;
-  }
+  const first = await getInternships({ ...query, page: 1, page_size: FETCH_ALL_PAGE_SIZE }, token);
+  const items: InternshipOut[] = [...first.items];
+  if (items.length === 0 || items.length >= first.total) return items;
+
+  const pagesNeeded = Math.min(Math.ceil(first.total / FETCH_ALL_PAGE_SIZE), FETCH_ALL_SAFETY_CAP);
+  const remainingPages = Array.from({ length: pagesNeeded - 1 }, (_, i) => i + 2); // [2, 3, ...]
+  const rest = await Promise.all(
+    remainingPages.map((page) => getInternships({ ...query, page, page_size: FETCH_ALL_PAGE_SIZE }, token)),
+  );
+  for (const res of rest) items.push(...res.items);
   return items;
 }
 
