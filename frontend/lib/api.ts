@@ -53,6 +53,35 @@ export function getInternships(query: InternshipQuery): Promise<InternshipListRe
   return apiFetch<InternshipListResponse>(`/internships${buildQueryString({ ...query })}`);
 }
 
+const FETCH_ALL_PAGE_SIZE = 100; // backend's MAX_PAGE_SIZE
+const FETCH_ALL_SAFETY_CAP = 5; // stop after 500 items regardless of `total`
+
+/**
+ * Fetch every internship matching a query (ignoring `page`/`page_size`),
+ * across as many backend pages as needed. Exists for the homepage's
+ * USA-only display filter (see lib/location.ts): filtering a single
+ * fetched page of results client-side can leave a page looking empty
+ * even though later pages have real matches (a real bug reported after
+ * shipping the page-at-a-time version - see git history). Pagination
+ * has to run over the *filtered* set, which means having the whole
+ * matching set in hand first.
+ *
+ * This is only safe at the platform's current scale (~100-200 active
+ * internships, confirmed sub-second responses) - if the active dataset
+ * grows into the thousands, replace this (and the client-side location
+ * filter it supports) with a real backend-level location/country
+ * filter instead of fetching everything per request.
+ */
+export async function getAllInternships(query: Omit<InternshipQuery, "page" | "page_size">): Promise<InternshipOut[]> {
+  const items: InternshipOut[] = [];
+  for (let page = 1; page <= FETCH_ALL_SAFETY_CAP; page++) {
+    const res = await getInternships({ ...query, page, page_size: FETCH_ALL_PAGE_SIZE });
+    items.push(...res.items);
+    if (items.length >= res.total || res.items.length === 0) break;
+  }
+  return items;
+}
+
 export function getInternship(id: number): Promise<InternshipOut> {
   return apiFetch<InternshipOut>(`/internships/${id}`);
 }

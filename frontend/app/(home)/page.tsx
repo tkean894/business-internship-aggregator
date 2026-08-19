@@ -6,7 +6,7 @@ import InternshipList from "@/components/InternshipList";
 import Pagination from "@/components/Pagination";
 import SearchBar from "@/components/SearchBar";
 import SortSelect from "@/components/SortSelect";
-import { getCategories, getCompanies, getInternships } from "@/lib/api";
+import { getAllInternships, getCategories, getCompanies } from "@/lib/api";
 import { isUsLocation } from "@/lib/location";
 import type { InternshipCategory, InternshipSort } from "@/lib/types";
 
@@ -33,19 +33,22 @@ export default async function HomePage({ searchParams }: HomePageProps) {
   const sort = (first(rawParams.sort) as InternshipSort | undefined) ?? "posted_date_desc";
   const page = Number(first(rawParams.page) ?? "1") || 1;
 
-  const [internshipsRes, categoriesRes, companiesRes] = await Promise.all([
-    getInternships({ search, category, company, location, industry, sort, page, page_size: PAGE_SIZE, active: true }),
+  const [allMatchingInternships, categoriesRes, companiesRes] = await Promise.all([
+    getAllInternships({ search, category, company, location, industry, sort, active: true }),
     getCategories(),
     getCompanies(),
   ]);
 
-  // USA-only display filter (see lib/location.ts) - applied here, after
-  // the API call, rather than as a query param: the underlying data
-  // still has every internship, this only changes what the homepage
-  // shows. A page can therefore show fewer than PAGE_SIZE results after
-  // filtering, and the "results found" count below describes what's
-  // actually visible on this page, not the API's unfiltered total.
-  const visibleItems = internshipsRes.items.filter((item) => isUsLocation(item.location));
+  // USA-only display filter (see lib/location.ts). Pagination has to run
+  // over the *filtered* set, not a raw API page filtered after the fact -
+  // otherwise a page whose raw results happen to be mostly/all non-US
+  // would look completely empty even though later pages have real
+  // matches (a real bug: see git history). getAllInternships() fetches
+  // every internship matching the current search/filters up front so
+  // filtering and pagination can both be computed correctly here.
+  const usInternships = allMatchingInternships.filter((item) => isUsLocation(item.location));
+  const totalUsInternships = usInternships.length;
+  const visibleItems = usInternships.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   // Derived from data already fetched for the filter panel - no extra
   // API request needed for the hero stat.
@@ -109,7 +112,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
       </div>
 
       <p className="mb-4 text-sm text-slate-500">
-        {visibleItems.length} US-based internship{visibleItems.length === 1 ? "" : "s"} on this page
+        {totalUsInternships} US-based internship{totalUsInternships === 1 ? "" : "s"} found
       </p>
 
       {visibleItems.length === 0 ? (
@@ -117,12 +120,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
       ) : (
         <>
           <InternshipList internships={visibleItems} />
-          <Pagination
-            total={internshipsRes.total}
-            page={internshipsRes.page}
-            pageSize={internshipsRes.page_size}
-            currentParams={rawParams}
-          />
+          <Pagination total={totalUsInternships} page={page} pageSize={PAGE_SIZE} currentParams={rawParams} />
         </>
       )}
     </main>
