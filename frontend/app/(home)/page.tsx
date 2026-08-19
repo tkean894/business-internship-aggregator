@@ -7,10 +7,10 @@ import Pagination from "@/components/Pagination";
 import SearchBar from "@/components/SearchBar";
 import SortSelect from "@/components/SortSelect";
 import { getCategories, getCompanies, getInternships } from "@/lib/api";
+import { isUsLocation } from "@/lib/location";
 import type { InternshipCategory, InternshipSort } from "@/lib/types";
 
 const PAGE_SIZE = 12;
-const RECENTLY_ADDED_COUNT = 5;
 
 type RawSearchParams = Record<string, string | string[] | undefined>;
 
@@ -33,20 +33,19 @@ export default async function HomePage({ searchParams }: HomePageProps) {
   const sort = (first(rawParams.sort) as InternshipSort | undefined) ?? "posted_date_desc";
   const page = Number(first(rawParams.page) ?? "1") || 1;
 
-  const hasActiveFilters = Boolean(search || category || company || location || industry);
-
   const [internshipsRes, categoriesRes, companiesRes] = await Promise.all([
     getInternships({ search, category, company, location, industry, sort, page, page_size: PAGE_SIZE, active: true }),
     getCategories(),
     getCompanies(),
   ]);
 
-  // Only fetched on the unfiltered homepage view - "Recently Added" is a
-  // discovery feature, not needed (or worth the extra request) while the
-  // user is already deep in a filtered search.
-  const recentRes = hasActiveFilters
-    ? null
-    : await getInternships({ sort: "first_seen_desc", page: 1, page_size: RECENTLY_ADDED_COUNT, active: true });
+  // USA-only display filter (see lib/location.ts) - applied here, after
+  // the API call, rather than as a query param: the underlying data
+  // still has every internship, this only changes what the homepage
+  // shows. A page can therefore show fewer than PAGE_SIZE results after
+  // filtering, and the "results found" count below describes what's
+  // actually visible on this page, not the API's unfiltered total.
+  const visibleItems = internshipsRes.items.filter((item) => isUsLocation(item.location));
 
   // Derived from data already fetched for the filter panel - no extra
   // API request needed for the hero stat.
@@ -93,13 +92,6 @@ export default async function HomePage({ searchParams }: HomePageProps) {
         ))}
       </div>
 
-      {recentRes && recentRes.items.length > 0 && (
-        <section className="mb-8">
-          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-slate-500">Recently Added</h2>
-          <InternshipList internships={recentRes.items} />
-        </section>
-      )}
-
       <div className="mb-6 flex flex-col gap-4">
         <SearchBar defaultValue={search ?? ""} />
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -117,14 +109,14 @@ export default async function HomePage({ searchParams }: HomePageProps) {
       </div>
 
       <p className="mb-4 text-sm text-slate-500">
-        {internshipsRes.total} internship{internshipsRes.total === 1 ? "" : "s"} found
+        {visibleItems.length} US-based internship{visibleItems.length === 1 ? "" : "s"} on this page
       </p>
 
-      {internshipsRes.items.length === 0 ? (
+      {visibleItems.length === 0 ? (
         <EmptyState context={emptyStateContext} />
       ) : (
         <>
-          <InternshipList internships={internshipsRes.items} />
+          <InternshipList internships={visibleItems} />
           <Pagination
             total={internshipsRes.total}
             page={internshipsRes.page}
