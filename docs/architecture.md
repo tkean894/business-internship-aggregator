@@ -280,6 +280,76 @@ Two different timestamps answer two different questions, and the platform is del
 
 ### Frontend / Product
 
-All additions reuse the existing `frontend/lib/api.ts` client and existing endpoints - no new client-side data-fetching pattern, no new Client Components beyond extending the two that already existed (`FilterPanel`, `SortSelect`). The homepage's "Recently Added" section and its live stats line are the only genuinely new API-facing behavior: stats are derived from data already fetched for the filter panel (summing `active_internship_count` across `GET /companies`' response, and `categories.length` from the existing `GET /categories` call) rather than issuing an extra request, and "Recently Added" (`GET /internships?sort=first_seen_desc`) is only fetched on the unfiltered homepage view, not while a user is mid-search, per the "avoid unnecessary requests" principle in this phase's own instructions. Category-pill and company-list "discovery" (`/companies`, a new Server Component page) both link back into the existing `?category=`/detail-page query-param filtering rather than introducing parallel pages or endpoints.
+All additions reuse the existing `frontend/lib/api.ts` client and existing endpoints - no new client-side data-fetching pattern, no new Client Components beyond extending the two that already existed (`FilterPanel`, `SortSelect`). The homepage's live stats line is derived from data already fetched for the filter panel (summing `active_internship_count` across `GET /companies`' response, and `categories.length` from the existing `GET /categories` call) rather than issuing an extra request. Category-pill and company-list "discovery" (`/companies`, a new Server Component page) both link back into the existing `?category=`/detail-page query-param filtering rather than introducing parallel pages or endpoints. (A "Recently Added" section was briefly added and then removed after shipping - see the git history around the homepage pagination fix - once it became clear the USA-location display filter needed pagination to run over the fully-filtered result set rather than a single fetched page.)
 
 **Responsive design and accessibility**: reviewed via the rendered HTML and Tailwind utility classes actually present (no obvious layout overflow, `flex-wrap` used throughout the filter/pill rows, existing `sm:`/mobile-first breakpoints extended consistently to new elements) and via `sr-only` labels on every new form control (the industry `<select>` follows the exact pattern of the existing category/company selects). No visual browser-based testing was performed or claimed - this environment has no browser - consistent with how Phase 4's original frontend work was verified (`curl` against real rendered output only).
+
+## Implementation Notes (Phase 8 — Accounts, Saved Internships & Notifications)
+
+Goal: let users create accounts, save internships, and get emailed about new matches or saved internships going inactive - without weakening anonymous browsing, without a second scheduler, and without the frontend's own claims about who's signed in ever being trusted by the backend.
+
+### Authentication
+
+Chosen: **Clerk**. The frontend and backend are two independently-deployed services (Next.js on Vercel, FastAPI on Render) - whatever "signed in" means has to be verifiable by FastAPI on its own, not just asserted by whatever the browser sends. Clerk issues a signed JWT per session; `backend/api/auth.py` verifies it independently using `PyJWT`'s `PyJWKClient` against Clerk's own public JWKS endpoint (`CLERK_JWKS_URL`) - no shared secret, no trusting the frontend, and a forged token (even one that reuses Clerk's real, publicly-visible key ID) fails signature verification (see `tests/test_auth.py`, which tests this against Clerk's real JWKS, not a mock). `get_current_user_optional()` returns `None` for a request with no `Authorization` header at all (the normal anonymous case - never an error) but rejects a *present but invalid/expired* token with 401, so a client can always distinguish "not signed in" from "your session expired."
+
+`backend/models/user.py`'s `User` table deliberately never stores a password or session token - only `clerk_user_id` (Clerk's own identifier) and a cached `email` (looked up once, on first sign-in, via Clerk's Backend API - `backend/services/clerk_client.py` - so composing a notification email never needs a live Clerk API call). Clerk remains the sole source of truth for credentials.
+
+The Next.js app needs `CLERK_SECRET_KEY` too, separately from the backend's copy - a real, non-obvious finding from actually deploying this: `@clerk/nextjs`'s own middleware (`frontend/middleware.ts`) and `auth()` server helper verify sessions server-side using that key, which is a completely different use from the backend's (which only calls Clerk's Backend API for the one-time email lookup above). Both are legitimate; neither exposes the secret to the browser.
+
+### Database
+
+Four new tables (migration `ae99487d261d`), all via Alembic, none touching existing tables' data:
+
+- **`users`** — see above.
+- **`saved_internships`** — `UNIQUE(user_id, internship_id)` is the actual mechanism preventing a duplicate save, enforced by Postgres, not application logic; both foreign keys are `ondelete="CASCADE"`. Deliberately does not mirror the internship's `is_active` state - a saved internship going inactive is discovered by joining through to the live `Internship` row (see "Saved Internship Lifecycle" below), so it can never drift out of sync with the real scraper-maintained state.
+- **`notification_preferences`** — one row per user; `categories`/`industries`/`locations` are plain Postgres `TEXT[]` arrays (not a DB enum, unlike `internship_category`) validated against `InternshipCategory` at the Pydantic layer instead - an empty array means "no filter on this dimension," not "matches nothing." `last_notified_at` is only ever touched for daily/weekly (digest) frequencies; an immediate-frequency user's cadence is always "now."
+- **`notification_events`** — see "Notification idempotency" below; this table *is* the idempotency mechanism, not just a log of one.
+
+### Saved Internships
+
+`POST /internships/{id}/save` and `DELETE /internships/{id}/save` (both requiring auth via `get_current_user`) live in `backend/api/routes/internships.py` alongside the existing read endpoints, reusing the same `Internship`/`Company` models. Saving uses `INSERT ... ON CONFLICT DO NOTHING` against the unique constraint rather than a check-then-insert, so a duplicate save is a safe no-op even under concurrent requests (a check-then-insert has a race window; the database constraint does not). Unsaving a never-saved internship is a no-op 204, not an error. `GET /internships` and `GET /internships/{id}` now also accept an *optional* auth token (`get_current_user_optional`) and set `is_saved` per item from a single extra query (`_saved_internship_ids()` - one query for a whole page, not one per item) - `false` for anonymous requests, never an error, per the explicit requirement that browsing must never require auth.
+
+Frontend: `SaveButton` (`frontend/components/SaveButton.tsx`) is a small Client Component using Clerk's `useAuth().getToken()` to call the backend directly; an anonymous click opens Clerk's sign-in modal instead of erroring. On `InternshipCard`, the button previously would have had to nest inside the card's own link to the detail page - instead the card uses the "stretched link" pattern (the title `<Link>` gets `after:absolute after:inset-0` to make the whole card clickable, while `SaveButton` sits alongside it with `relative z-10`), avoiding an invalid/inaccessible nested interactive element. Both `SaveButton` instances are deliberately styled as an outlined, muted button - visually secondary to the solid dark Apply button on every card and the detail page, per the explicit "don't make Save more prominent than Apply" requirement.
+
+### Saved Internship Lifecycle
+
+No new mechanism was needed here - it falls directly out of the existing design. `GET /me/saved` joins each `SavedInternship` through to its live `Internship` row, so `is_active` (and everything else) always reflects the current scraper-maintained state, never a stale copy. `InternshipCard` gained a "No longer active" badge (alongside the existing "New" badge) so this is visible wherever the card is rendered, including `/saved`. The user can always unsave an inactive internship (the DELETE endpoint doesn't care about `is_active`); nothing auto-deletes a save when its internship goes inactive, and if the same posting reappears (`is_active` flips back to `true` via the existing scraper lifecycle - unchanged, see Phase 7), the save is still there and reflects it immediately, no special-casing required.
+
+### Notifications
+
+```text
+scraper (existing, unchanged)
+    v
+generate_new_match_events()        - eligibility, idempotent insert
+generate_saved_inactive_events()   - eligibility, idempotent insert
+    v
+send_pending_notifications()       - cadence-gated delivery via Resend
+```
+
+All three live in `backend/services/notifications.py` and run as one more step appended to the existing `.github/workflows/scraper.yml`, after the scraper - deliberately not a second scheduler or server (the task's own explicit constraint). `if: always()` on that step means it still runs even if the scraper step reported a hard failure for one company - the notification step operates entirely off already-committed database state, and 15 companies' worth of valid new data shouldn't go un-notified because a 16th company's site was briefly down.
+
+**New match eligibility** (`generate_new_match_events`): for every user with notifications enabled, finds active internships matching their category/industry/location filters *and* first discovered after their preference row was created - never retroactively notifying about internships that already existed when someone signed up or changed their preferences (an explicit requirement, and covered by `tests/test_notifications.py::test_internship_older_than_preference_does_not_notify`).
+
+**Saved-internship-inactive eligibility** (`generate_saved_inactive_events`): every saved internship that's currently `is_active=False` gets an eligibility row, regardless of notification preference (the send step gates on preference, not this one - see below).
+
+**Notification idempotency** is a database constraint, not application bookkeeping: `notification_events` has `UNIQUE(user_id, internship_id, event_type)` (migration `ae99487d261d`), and every insert goes through Postgres's `ON CONFLICT DO NOTHING`. Re-running the whole module - a retried GitHub Actions workflow, a manual re-run, the same scraper cycle somehow firing twice - inserts zero new rows for anything already generated, by construction. This was verified for real, not just asserted: `tests/test_notifications.py` calls `generate_new_match_events`/`generate_saved_inactive_events` two and three times in a row and asserts the count stays at exactly one row, and a manual end-to-end script (see "Problems Encountered" in this phase's completion report) exercised the same idempotency against the real local Postgres instance before any of this shipped.
+
+**Delivery cadence** (`send_pending_notifications`): a user's `frequency` preference controls *when* their already-eligible events get emailed, not whether eligibility is tracked. `immediate` is always due; `daily`/`weekly` compare `now - last_notified_at` against the interval. All of a user's currently-PENDING events (which may mix new-match and saved-inactive reasons) are batched into a single digest email per send, even for `immediate` - since this job only ever runs on the scraper's own 6-hour cadence (there is no separate always-on server that could deliver sooner), "immediate" in practice means "on the next scraper run," and batching avoids sending someone five separate emails for five things discovered in the same run. A user with `email_enabled=False` or `frequency=off` is skipped entirely at send time; their events stay `PENDING` and become eligible for delivery automatically if they re-enable notifications later - nothing is lost, nothing is force-flushed.
+
+A failed send (`EmailSendError`) marks every event in that attempt `FAILED` with a truncated `error_message`, never `SENT` - `tests/test_notifications.py::test_failed_email_marks_events_failed_not_sent` asserts this directly, including that `sent_at` stays `None`. A failed digest is not retried by this run (the next scheduled run will pick up any *new* eligible events, but the failed ones stay `FAILED`, visible for manual investigation, rather than being silently retried into a potential duplicate).
+
+### Email Provider
+
+**Resend**, behind `backend/services/email.py`'s single `send_email()` function - the only place in the codebase that talks to Resend's API. Raises `EmailSendError` on any failure (network error, non-2xx response) rather than swallowing it; callers (`notifications.py`) are responsible for recording that failure against the relevant `NotificationEvent` rows. Verified against the real Resend API during development (not just mocked): a request to an unverified arbitrary address was correctly rejected with Resend's own validation error, and a request to Resend's documented test address (`delivered@resend.dev`) succeeded end-to-end, including through the full `generate_*` → `send_pending_notifications` pipeline against real local Postgres data.
+
+**Domain limitation, stated plainly**: this project has no verified custom domain (deliberately - see Phase 6 "Domain," never purchased). Without one, Resend's free tier only delivers to the account owner's own email address, not arbitrary signed-up users. The notification pipeline itself is fully built, tested, and idempotent regardless of this; real delivery to real users is gated on adding a verified domain in a future phase, and is documented as a current limitation rather than glossed over.
+
+### Environment Variables (new)
+
+| Variable | Where | Purpose |
+|---|---|---|
+| `CLERK_JWKS_URL`, `CLERK_SECRET_KEY` | Backend (`.env`, Render) | Independent session verification + one-time email lookups |
+| `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY` | Frontend (`frontend/.env.local`, Vercel) | Clerk's own Next.js SDK - a separate use of the secret key from the backend's, per "Authentication" above |
+| `RESEND_API_KEY`, `NOTIFICATIONS_FROM_EMAIL` | Backend (`.env`, Render, GitHub Actions secrets) | Email sending - needed by both the live API process (not currently, but kept alongside other backend secrets) and the GitHub Actions notification step |
+
+`CORS_ALLOWED_ORIGINS`/`allow_methods` on the FastAPI app were reviewed and updated: the API was GET-only before this phase (a read-only API), and now needs `POST`/`PUT`/`DELETE` for the save/preferences endpoints - previously this would have silently CORS-blocked every new endpoint from the browser.

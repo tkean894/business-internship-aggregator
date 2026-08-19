@@ -1,7 +1,9 @@
+import { auth } from "@clerk/nextjs/server";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import CompanyCard from "@/components/CompanyCard";
+import SaveButton from "@/components/SaveButton";
 import { NotFoundError, getInternship } from "@/lib/api";
 import { formatDate, freshnessLabel, isNewlyDiscovered } from "@/lib/format";
 
@@ -16,7 +18,10 @@ export default async function InternshipDetailPage({ params }: InternshipDetailP
     notFound();
   }
 
-  const internship = await getInternship(internshipId).catch((err) => {
+  const { getToken } = await auth();
+  const token = await getToken();
+
+  const internship = await getInternship(internshipId, token).catch((err) => {
     if (err instanceof NotFoundError) notFound();
     throw err;
   });
@@ -71,14 +76,17 @@ export default async function InternshipDetailPage({ params }: InternshipDetailP
       </dl>
 
       <div className="mt-6">
-        <a
-          href={internship.application_url}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-block rounded-md bg-slate-900 px-6 py-3 text-sm font-semibold text-white hover:bg-slate-700"
-        >
-          Apply on company site ↗
-        </a>
+        <div className="flex flex-wrap items-center gap-3">
+          <a
+            href={internship.application_url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-block rounded-md bg-slate-900 px-6 py-3 text-sm font-semibold text-white hover:bg-slate-700"
+          >
+            Apply on company site ↗
+          </a>
+          <SaveButton internshipId={internship.id} initialSaved={internship.is_saved} size="md" />
+        </div>
         {!internship.is_active && (
           <p className="mt-2 text-sm text-amber-600">
             This posting is no longer active on the company&apos;s site. Historical record only.

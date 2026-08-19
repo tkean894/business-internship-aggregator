@@ -1,3 +1,4 @@
+import { auth } from "@clerk/nextjs/server";
 import Link from "next/link";
 
 import EmptyState from "@/components/EmptyState";
@@ -35,8 +36,11 @@ export default async function HomePage({ searchParams }: HomePageProps) {
 
   const hasActiveFilters = Boolean(search || category || company || location || industry);
 
+  const { getToken } = await auth();
+  const token = await getToken();
+
   const [allMatchingInternships, categoriesRes, companiesRes] = await Promise.all([
-    getAllInternships({ search, category, company, location, industry, sort, active: true }),
+    getAllInternships({ search, category, company, location, industry, sort, active: true }, token),
     getCategories(),
     getCompanies(),
   ]);

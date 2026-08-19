@@ -24,7 +24,7 @@ An automated pipeline that scrapes company career pages for business-relevant in
 
 ## Current Status
 
-**Deployed to production, scraping 16 real companies across 3 ATS platforms (Phases 1–8 complete).** PostgreSQL schema, SQLAlchemy models, and Alembic migrations are implemented and tested. A read-only FastAPI backend (search, filtering by category/company/location/industry, pagination, sorting) is implemented and tested against live data. A Next.js (App Router, TypeScript, Tailwind) frontend consumes that API — search, filters, sorting, freshness/"New" indicators, category and company discovery, internship and company detail pages. The scraper runs on a schedule via GitHub Actions against a managed production database (see "Live Application" and "Production" below). See `docs/roadmap.md` for the full phase-by-phase build order.
+**Deployed to production, scraping 16 real companies across 3 ATS platforms, with user accounts and notifications (Phases 1–9 complete).** PostgreSQL schema, SQLAlchemy models, and Alembic migrations are implemented and tested. A FastAPI backend (search, filtering by category/company/location/industry, pagination, sorting - all still fully usable anonymously) is implemented and tested against live data, plus authenticated endpoints for saving internships and managing notification preferences. A Next.js (App Router, TypeScript, Tailwind) frontend consumes that API — search, filters, sorting, freshness/"New" indicators, category and company discovery, internship and company detail pages, sign-in/sign-up, saving internships, and a notification-preferences page. The scraper runs on a schedule via GitHub Actions against a managed production database, followed by an idempotent notification-processing step (see "Live Application" and "Production" below). See `docs/roadmap.md` for the full phase-by-phase build order.
 
 ## Supported ATS Platforms & Companies
 
@@ -46,6 +46,8 @@ All three integrations share the same `BaseScraper` lifecycle (company lookup, d
 | ORM | SQLAlchemy |
 | Scraping | Python, `requests` (both current ATS integrations expose public JSON APIs; Playwright remains a dependency for a future non-API ATS, per `docs/roadmap.md`) |
 | Automation | GitHub Actions |
+| Authentication | Clerk |
+| Transactional email | Resend |
 | Testing | pytest |
 | Version Control | Git + GitHub |
 
@@ -86,6 +88,9 @@ Requires PostgreSQL, Python 3.12+, and Node.js 20.9+ (LTS) installed locally.
 | `DATABASE_URL` | `.env` | PostgreSQL connection string |
 | `CORS_ALLOWED_ORIGINS` | `.env` | Origins allowed to call the API (default `http://localhost:3000`) |
 | `NEXT_PUBLIC_API_BASE_URL` | `frontend/.env.local` | Base URL the frontend calls (default `http://localhost:8000`) |
+| `CLERK_JWKS_URL`, `CLERK_SECRET_KEY` | `.env` | Backend verifies session tokens independently against Clerk's JWKS; secret key is only used for one-time email lookups (`backend/services/clerk_client.py`) |
+| `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY` | `frontend/.env.local` | Next.js's own Clerk SDK needs both — the secret key here is a *separate* use from the backend's copy (Next.js verifies sessions server-side via middleware/`auth()`) |
+| `RESEND_API_KEY`, `NOTIFICATIONS_FROM_EMAIL` | `.env` | Email provider for notifications (`backend/services/email.py`) |
 
 **Terminal 1 — PostgreSQL**: start the `postgresql-x64-16` Windows service (or however it's installed locally), and make sure the `business_internships` database exists.
 
@@ -117,6 +122,16 @@ GET /internships/12
 GET /companies
 GET /companies/6
 GET /categories
+GET /me                                    (requires Authorization: Bearer <clerk token>)
+GET /me/saved                              (requires auth)
+GET /me/notification-preferences           (requires auth)
+POST /internships/12/save                  (requires auth)
+DELETE /internships/12/save                (requires auth)
+```
+
+Notification processing (idempotent - safe to re-run):
+```
+.\.venv\Scripts\python -m backend.services.notifications
 ```
 
 **Running tests** (requires the local PostgreSQL setup above — tests run against the local dev database and clean up their own `test-`-prefixed data; external HTTP calls are mocked, so no scraper test depends on a real career site):
@@ -147,9 +162,13 @@ Managed PostgreSQL (Neon)
 | Database | [Neon](https://neon.tech) | Managed serverless Postgres, free tier. Schema created via `alembic upgrade head`, never manual DDL. |
 | Backend | [Render](https://render.com) | Free Web Service, deployed via `render.yaml` (Blueprint). Start command runs `alembic upgrade head` before `uvicorn` on every deploy, so schema changes ship automatically. No `--reload`, no debug mode. |
 | Frontend | [Vercel](https://vercel.com) | Auto-deploys `frontend/` on push to `main`. |
-| Scraper automation | GitHub Actions (`.github/workflows/scraper.yml`) | Runs on a 6-hour schedule and via manual `workflow_dispatch`. Applies migrations, then runs `python -m scrapers.scheduler`, which runs every company scraper with per-company error isolation. |
+| Scraper automation | GitHub Actions (`.github/workflows/scraper.yml`) | Runs on a 6-hour schedule and via manual `workflow_dispatch`. Applies migrations, runs `python -m scrapers.scheduler` (every company scraper, per-company error isolation), then `python -m backend.services.notifications` (idempotent - see "Notifications" below). |
+| Authentication | [Clerk](https://clerk.com) | Free tier (10,000 MAU). Handles sign-up/sign-in/sessions entirely; FastAPI verifies each request's session token independently against Clerk's JWKS (`backend/api/auth.py`) rather than trusting the frontend. |
+| Email | [Resend](https://resend.com) | Free tier. Without a verified sending domain (this project has none - see "Domain" below), delivery is limited to the Resend account owner's own address; the notification pipeline itself is fully built and tested regardless. |
 
 **Environment separation**: local development uses `.env` (backend) / `frontend/.env.local` (frontend), both gitignored and never committed. Production configuration lives entirely in Render's environment variables, Vercel's environment variables, and GitHub Actions repository secrets — never in source. `DATABASE_URL` in particular is a GitHub Actions secret (used by the scraper workflow) and a Render environment variable (used by the API) — the two are separate configuration surfaces pointing at the same managed database, and neither value is ever logged or committed.
+
+**Notifications**: see `docs/architecture.md` ("Notifications") for the full design. In short: after each scraper run, a separate step registers which (user, internship) pairs are newly eligible for a notification (a new posting matching someone's saved preferences, or a saved internship going inactive) as rows in `notification_events`, then sends emails to whoever is due based on their frequency preference. A `UNIQUE(user_id, internship_id, event_type)` database constraint - not application bookkeeping - is what makes this idempotent: re-running the whole job after nothing changed inserts zero new rows, so a retried GitHub Actions workflow can never send a duplicate.
 
 **CORS**: `CORS_ALLOWED_ORIGINS` on Render is a comma-separated allowlist (currently local dev + the production Vercel URL) — never a wildcard.
 
@@ -162,15 +181,15 @@ Managed PostgreSQL (Neon)
 - Basic REST API (search, filter, pagination)
 - Searchable web interface with basic filtering
 
-User accounts, AI resume matching, personalized recommendations, notifications, application tracking, and advanced analytics are explicitly **out of scope** for the MVP — see [`docs/PRD.md`](docs/PRD.md) for full scope and rationale.
+User accounts, saved internships, and email notifications have since been added (Phase 9) - see "Current Status" above and `docs/roadmap.md`. AI resume matching, personalized recommendations, application tracking, and advanced analytics remain **out of scope** for now — see [`docs/PRD.md`](docs/PRD.md) for full scope and rationale.
 
 ## Roadmap
 
-Development proceeds in phases, from foundation → database → scraping MVP → backend → frontend → multi-company scraping → automation → product features → intelligence (AI). Full phase-by-phase detail, including goals and definitions of done, is in [`docs/roadmap.md`](docs/roadmap.md).
+Development proceeds in phases, from foundation → database → scraping MVP → backend → frontend → multi-company scraping → automation/deployment → dataset expansion → accounts/saved internships/notifications → intelligence (AI). Full phase-by-phase detail, including goals and definitions of done, is in [`docs/roadmap.md`](docs/roadmap.md).
 
 ## Future Vision
 
-Beyond the MVP, the long-term goal is to become a broader internship discovery and career intelligence platform for business students — including user accounts, saved searches, email alerts, application tracking, resume matching, AI-powered recommendations, and hiring trend analytics.
+Beyond the current feature set, the long-term goal is to become a broader internship discovery and career intelligence platform for business students — including application tracking, resume matching, AI-powered recommendations, and hiring trend analytics.
 
 ## Repository Structure
 
@@ -178,12 +197,15 @@ Beyond the MVP, the long-term goal is to become a broader internship discovery a
 business-internship-aggregator/
 │
 ├── frontend/
-│   ├── app/            # Next.js App Router pages (home, internship/company detail)
-│   ├── components/     # Reusable UI components
+│   ├── app/            # Next.js App Router pages (home, internship/company detail,
+│   │                   #   sign-in/up, saved, settings/notifications)
+│   ├── components/     # Reusable UI components (incl. SaveButton, NotificationPreferencesForm)
+│   ├── middleware.ts    # Clerk auth middleware
 │   └── lib/             # Typed API client + shared types
 ├── backend/
-│   ├── api/           # FastAPI app, routes, response schemas
-│   ├── models/         # SQLAlchemy models
+│   ├── api/           # FastAPI app, routes, response schemas, auth.py (Clerk JWT verification)
+│   ├── models/         # SQLAlchemy models (incl. User, SavedInternship, NotificationPreference/Event)
+│   ├── services/        # email.py (Resend), notifications.py (eligibility + send), clerk_client.py
 │   └── database/       # DB session, dedupe-key utils, seed data
 ├── scrapers/
 │   ├── companies/      # Per-company scraper configs (see "Supported ATS Platforms" above)

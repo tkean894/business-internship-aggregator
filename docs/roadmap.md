@@ -118,17 +118,17 @@ This phase grew from its original scope (automation only) to include full produc
 
 **Definition of Done:** ✅ A substantially broader, more diverse dataset (verified against production: 16 companies, 118 active internships, 10 industries), improved classification accuracy on real data, and a frontend that functions as an actual discovery product rather than a raw search form — all without accounts, saved jobs, notifications, or AI.
 
-## Phase 8 — Product Features
+## Phase 8 — Product Features (Complete)
 
-**Goal:** Add user-facing product depth beyond the core MVP.
+**Goal:** Add user-facing product depth beyond the core MVP. Internally tracked as "Phase 9" in project instructions at the time (numbering had drifted from this document after Phase 7 was inserted - see that phase's note); implemented here since it matches this slot's original scope.
 
 **Key Tasks:**
-- User accounts / authentication
-- Saved internships
-- Notifications (e.g., email alerts for new matches)
-- Application tracking
+- ~~User accounts / authentication~~ — done via Clerk (see `docs/architecture.md` "Authentication"); FastAPI verifies every request independently against Clerk's JWKS rather than trusting the frontend
+- ~~Saved internships~~ — done (`saved_internships` table, `UNIQUE(user_id, internship_id)`, Save/Saved button on cards and detail pages, `/saved` page)
+- ~~Notifications~~ — done: new-match and saved-internship-inactive email alerts, idempotent via a `UNIQUE(user_id, internship_id, event_type)` constraint on `notification_events`, delivered through Resend as part of the existing GitHub Actions scraper workflow (no second scheduler)
+- Application tracking — not implemented; a reasonable candidate for a future phase, not required for this one's core goal
 
-**Definition of Done:** Users can create accounts, save internships, receive notifications, and track application status — layered on top of the working MVP.
+**Definition of Done:** ✅ Users can create accounts, sign in/out, save internships, and configure notification preferences (categories/industries/locations/frequency); anonymous browsing is entirely unaffected. Verified against production (see completion report for this phase). Application tracking deliberately deferred.
 
 ## Phase 9 — Intelligence
 

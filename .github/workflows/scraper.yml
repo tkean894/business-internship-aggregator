@@ -23,6 +23,8 @@ jobs:
     timeout-minutes: 15
     env:
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+      NOTIFICATIONS_FROM_EMAIL: ${{ secrets.NOTIFICATIONS_FROM_EMAIL }}
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -41,3 +43,14 @@ jobs:
 
       - name: Run scrapers
         run: python -m scrapers.scheduler
+
+      - name: Process notifications
+        # Runs regardless of the scraper step's own per-listing errors
+        # (it already isolates and reports those itself - see
+        # scrapers/scheduler.py) - a notification run is still valid and
+        # idempotent even if e.g. one company's scraper failed outright.
+        # Never touches Clerk (no auth verification happens here, only
+        # reading users/preferences already in Postgres and sending
+        # email) so CLERK_* secrets aren't needed by this job.
+        if: always()
+        run: python -m backend.services.notifications

@@ -45,6 +45,12 @@ class InternshipOut(BaseModel):
     first_seen_at: datetime
     last_seen_at: datetime
     is_active: bool
+    # Per-request, per-user field - never present on the ORM object
+    # itself (a save is a fact about a user, not about an internship),
+    # so routes set this explicitly after validating from the ORM row
+    # rather than relying on from_attributes to find it. False/absent
+    # for anonymous requests (Phase 9, Step 4) - never an error.
+    is_saved: bool = False
 
 
 class InternshipBrief(BaseModel):

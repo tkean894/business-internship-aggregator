@@ -1,12 +1,14 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy import Select, func, or_, select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session, contains_eager
 
+from backend.api.auth import get_current_user, get_current_user_optional
 from backend.api.dependencies import get_db
 from backend.api.schemas.internships import InternshipListResponse, InternshipOut, InternshipSort
-from backend.models import Company, Internship
+from backend.models import Company, Internship, SavedInternship, User
 from backend.models.internship import InternshipCategory
 
 router = APIRouter(prefix="/internships", tags=["internships"])
@@ -56,9 +58,21 @@ def _apply_filters(
     return stmt
 
 
+def _saved_internship_ids(db: Session, user: User | None, internship_ids: list[int]) -> set[int]:
+    """IDs (from `internship_ids`) the given user has saved. Empty for
+    an anonymous request - never an error (Phase 9, Step 4)."""
+    if user is None or not internship_ids:
+        return set()
+    stmt = select(SavedInternship.internship_id).where(
+        SavedInternship.user_id == user.id, SavedInternship.internship_id.in_(internship_ids)
+    )
+    return set(db.scalars(stmt).all())
+
+
 @router.get("", response_model=InternshipListResponse, summary="List internships")
 def list_internships(
     db: Session = Depends(get_db),
+    current_user: User | None = Depends(get_current_user_optional),
     search: str | None = Query(default=None, description="Case-insensitive text search across title, description, location, and company name"),
     category: InternshipCategory | None = Query(default=None, description="Filter by exact category"),
     company: str | None = Query(default=None, description="Filter by company name (partial match)"),
@@ -84,9 +98,10 @@ def list_internships(
     data_stmt = data_stmt.offset((page - 1) * page_size).limit(page_size)
 
     items = db.scalars(data_stmt).unique().all()
+    saved_ids = _saved_internship_ids(db, current_user, [item.id for item in items])
 
     return InternshipListResponse(
-        items=[InternshipOut.model_validate(item) for item in items],
+        items=[InternshipOut.model_validate(item).model_copy(update={"is_saved": item.id in saved_ids}) for item in items],
         total=total,
         page=page,
         page_size=page_size,
@@ -94,7 +109,11 @@ def list_internships(
 
 
 @router.get("/{internship_id}", response_model=InternshipOut, summary="Get a single internship")
-def get_internship(internship_id: int, db: Session = Depends(get_db)) -> InternshipOut:
+def get_internship(
+    internship_id: int,
+    db: Session = Depends(get_db),
+    current_user: User | None = Depends(get_current_user_optional),
+) -> InternshipOut:
     stmt = (
         select(Internship)
         .join(Internship.company)
@@ -104,4 +123,43 @@ def get_internship(internship_id: int, db: Session = Depends(get_db)) -> Interns
     internship = db.scalars(stmt).unique().one_or_none()
     if internship is None:
         raise HTTPException(status_code=404, detail="Internship not found")
-    return InternshipOut.model_validate(internship)
+    is_saved = internship_id in _saved_internship_ids(db, current_user, [internship_id])
+    return InternshipOut.model_validate(internship).model_copy(update={"is_saved": is_saved})
+
+
+@router.post("/{internship_id}/save", status_code=status.HTTP_201_CREATED, summary="Save an internship")
+def save_internship(
+    internship_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> dict[str, bool]:
+    exists = db.scalar(select(Internship.id).where(Internship.id == internship_id))
+    if exists is None:
+        raise HTTPException(status_code=404, detail="Internship not found")
+
+    # ON CONFLICT DO NOTHING makes a duplicate save a safe no-op at the
+    # database level (the uq_saved_internships_user_internship
+    # constraint) rather than something the route has to check for
+    # itself with a separate SELECT-then-INSERT (which would race under
+    # concurrent requests).
+    stmt = (
+        pg_insert(SavedInternship)
+        .values(user_id=current_user.id, internship_id=internship_id)
+        .on_conflict_do_nothing(index_elements=["user_id", "internship_id"])
+    )
+    db.execute(stmt)
+    db.commit()
+    return {"saved": True}
+
+
+@router.delete("/{internship_id}/save", status_code=status.HTTP_204_NO_CONTENT, summary="Unsave an internship")
+def unsave_internship(
+    internship_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> Response:
+    db.query(SavedInternship).filter_by(user_id=current_user.id, internship_id=internship_id).delete()
+    db.commit()
+    # Idempotent either way - removing something that was never saved is
+    # not an error (Phase 9, Step 4).
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

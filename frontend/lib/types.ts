@@ -78,6 +78,7 @@ export interface InternshipOut {
   first_seen_at: string;
   last_seen_at: string;
   is_active: boolean;
+  is_saved: boolean;
 }
 
 export interface InternshipListResponse {
@@ -89,4 +90,40 @@ export interface InternshipListResponse {
 
 export interface CategoriesResponse {
   categories: string[];
+}
+
+export interface UserOut {
+  id: number;
+  email: string;
+  created_at: string;
+}
+
+export interface SavedInternshipOut {
+  id: number;
+  internship: InternshipOut;
+  created_at: string;
+}
+
+export interface SavedInternshipListResponse {
+  items: SavedInternshipOut[];
+  total: number;
+}
+
+export type NotificationFrequency = "immediate" | "daily" | "weekly" | "off";
+
+export interface NotificationPreferenceOut {
+  email_enabled: boolean;
+  frequency: NotificationFrequency;
+  categories: InternshipCategory[];
+  industries: string[];
+  locations: string[];
+  updated_at: string;
+}
+
+export interface NotificationPreferenceUpdate {
+  email_enabled?: boolean;
+  frequency?: NotificationFrequency;
+  categories?: InternshipCategory[];
+  industries?: string[];
+  locations?: string[];
 }

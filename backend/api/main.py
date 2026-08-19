@@ -9,7 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy.exc import SQLAlchemyError
 
-from backend.api.routes import categories, companies, internships
+from backend.api.routes import categories, companies, internships, me
 
 load_dotenv()
 
@@ -32,7 +32,11 @@ _allowed_origins = [
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_allowed_origins,
-    allow_methods=["GET"],
+    # Phase 9 added authenticated write endpoints (save/unsave, notification
+    # preferences) alongside the existing read-only ones - GET-only was
+    # correct for the read-only API this was originally written for, but
+    # would silently block every new endpoint below via CORS.
+    allow_methods=["GET", "POST", "PUT", "DELETE"],
     allow_headers=["*"],
 )
 
@@ -47,6 +51,7 @@ async def handle_database_error(request: Request, exc: SQLAlchemyError) -> JSONR
 app.include_router(internships.router)
 app.include_router(companies.router)
 app.include_router(categories.router)
+app.include_router(me.router)
 
 
 @app.get("/", tags=["health"], summary="Health check")

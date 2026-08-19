@@ -6,6 +6,7 @@ psycopg2-binary
 alembic
 pydantic
 python-dotenv
+PyJWT[crypto]  # verifies Clerk session JWTs against their JWKS - see backend/api/auth.py
 
 # Scraping
 playwright
