@@ -7,6 +7,7 @@ interface FilterPanelProps {
   categories: string[];
   companies: string[];
   industries: string[];
+  locations: string[];
   selectedCategory?: string;
   selectedCompany?: string;
   selectedLocation?: string;
@@ -17,6 +18,7 @@ export default function FilterPanel({
   categories,
   companies,
   industries,
+  locations,
   selectedCategory,
   selectedCompany,
   selectedLocation,
@@ -115,24 +117,26 @@ export default function FilterPanel({
         </select>
       </div>
 
-      <div>
-        <label htmlFor="filter-location" className="sr-only">
-          Location
-        </label>
-        <input
-          id="filter-location"
-          type="text"
-          defaultValue={selectedLocation ?? ""}
-          placeholder="Location"
-          onKeyDown={(e) => {
-            if (e.key === "Enter") {
-              updateParam("location", (e.target as HTMLInputElement).value);
-            }
-          }}
-          onBlur={(e) => updateParam("location", e.target.value)}
-          className="w-36 rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-slate-500 focus:outline-none focus:ring-2 focus:ring-slate-200"
-        />
-      </div>
+      {locations.length > 0 && (
+        <div>
+          <label htmlFor="filter-location" className="sr-only">
+            Location
+          </label>
+          <select
+            id="filter-location"
+            value={selectedLocation ?? ""}
+            onChange={(e) => updateParam("location", e.target.value)}
+            className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-slate-500 focus:outline-none focus:ring-2 focus:ring-slate-200"
+          >
+            <option value="">All locations</option>
+            {locations.map((loc) => (
+              <option key={loc} value={loc}>
+                {loc}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
 
       {hasActiveFilters && (
         <button

@@ -52,18 +52,24 @@ export default async function HomePage({ searchParams }: HomePageProps) {
   const totalUsInternships = usInternships.length;
   const visibleItems = usInternships.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
-  // Platform-wide USA-based total for the hero stat, independent of
-  // whatever search/filters are currently applied - this used to sum
-  // `active_internship_count` across every company (unfiltered by
-  // location), which didn't match the actually-USA-filtered results
-  // below and looked like a bug (e.g. "118 active internships" next to
-  // a page of 41). With no filters active, `usInternships` already IS
-  // the platform-wide set, so this only issues a second request when a
-  // filter is actually narrowing the results.
+  // Platform-wide USA-based set, independent of whatever search/filters
+  // are currently applied - used for the hero stat (this used to sum
+  // `active_internship_count` across every company unfiltered by
+  // location, which didn't match the actually-USA-filtered results
+  // below and looked like a bug: "118 active internships" next to a
+  // page of 41) and for the location filter's dropdown options, so the
+  // dropdown always offers every US location that could show a result,
+  // not just ones present in the currently-filtered subset. With no
+  // filters active, `usInternships` already IS the platform-wide set,
+  // so this only issues a second request when a filter is narrowing
+  // the results.
   const platformWideUsInternships = hasActiveFilters
-    ? (await getAllInternships({ active: true })).filter((item) => isUsLocation(item.location)).length
-    : totalUsInternships;
+    ? (await getAllInternships({ active: true })).filter((item) => isUsLocation(item.location))
+    : usInternships;
   const industries = Array.from(new Set(companiesRes.items.map((c) => c.industry).filter((i): i is string => Boolean(i)))).sort();
+  const locations = Array.from(
+    new Set(platformWideUsInternships.map((i) => i.location).filter((loc): loc is string => Boolean(loc))),
+  ).sort();
 
   const emptyStateContext = category
     ? `for ${category}`
@@ -71,7 +77,9 @@ export default async function HomePage({ searchParams }: HomePageProps) {
       ? `at ${company}`
       : industry
         ? `in ${industry}`
-        : undefined;
+        : location
+          ? `in ${location}`
+          : undefined;
 
   return (
     <main className="mx-auto max-w-5xl px-4 py-8 sm:py-12">
@@ -83,9 +91,9 @@ export default async function HomePage({ searchParams }: HomePageProps) {
           Search internships across finance, consulting, marketing, analytics, operations, product, and more.
         </p>
         <p className="mt-3 text-sm text-slate-500">
-          {platformWideUsInternships} active US-based internship{platformWideUsInternships === 1 ? "" : "s"} across{" "}
-          {companiesRes.total} compan{companiesRes.total === 1 ? "y" : "ies"} and {categoriesRes.categories.length}{" "}
-          categories.
+          {platformWideUsInternships.length} active US-based internship{platformWideUsInternships.length === 1 ? "" : "s"}{" "}
+          across {companiesRes.total} compan{companiesRes.total === 1 ? "y" : "ies"} and{" "}
+          {categoriesRes.categories.length} categories.
         </p>
       </header>
 
@@ -112,6 +120,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
             categories={categoriesRes.categories}
             companies={companiesRes.items.map((c) => c.name)}
             industries={industries}
+            locations={locations}
             selectedCategory={category}
             selectedCompany={company}
             selectedLocation={location}
