@@ -12,10 +12,12 @@ from scrapers.company_registry import (
     COMPANY_REGISTRY,
     ATSPlatform,
     CompanyStatus,
+    CompanyTier,
     get_by_ats,
     get_by_status,
     get_by_tier,
     get_implemented,
+    top_by_priority,
     validate_registry,
 )
 
@@ -72,8 +74,6 @@ def test_excluded_companies_are_not_implemented():
 
 
 def test_get_by_tier_and_get_by_ats_are_consistent_with_full_registry():
-    from scrapers.company_registry import CompanyTier
-
     seen = set()
     for tier in CompanyTier:
         seen.update(c.slug for c in get_by_tier(tier))
@@ -90,4 +90,73 @@ def test_registry_has_meaningful_size_and_tier_spread():
     # hard product requirement - guards against accidental truncation.
     assert len(COMPANY_REGISTRY) >= 50
     tiers_present = {c.tier for c in COMPANY_REGISTRY}
-    assert len(tiers_present) == 4
+    assert len(tiers_present) == 5
+
+
+def test_no_duplicate_company_names():
+    # Distinct from test_no_duplicate_slugs - guards against the same real
+    # company being entered twice under two different slugs (Phase 10 Step 4).
+    names = [c.name for c in COMPANY_REGISTRY]
+    assert len(names) == len(set(names))
+
+
+def test_all_scores_are_within_range():
+    # validate_registry() already enforces this at import/test-collection
+    # time; this test re-asserts it directly against every record so a
+    # future scoring bug fails with a clear, specific assertion.
+    for c in COMPANY_REGISTRY:
+        for score in (
+            c.business_relevance_score, c.company_reputation_score, c.internship_volume_score,
+            c.function_breadth_score, c.ats_accessibility_score, c.evidence_score,
+        ):
+            assert 0 <= score <= 10, c.slug
+        assert 0 <= c.priority_score <= 10, c.slug
+
+
+def test_priority_score_is_mean_of_six_subscores():
+    for c in COMPANY_REGISTRY:
+        expected = round((
+            c.business_relevance_score + c.company_reputation_score + c.internship_volume_score
+            + c.function_breadth_score + c.ats_accessibility_score + c.evidence_score
+        ) / 6, 2)
+        assert c.priority_score == expected, c.slug
+
+
+def test_top_by_priority_is_sorted_descending_and_deterministic():
+    top = top_by_priority(50)
+    assert len(top) == 50
+    scores = [c.priority_score for c in top]
+    assert scores == sorted(scores, reverse=True)
+    # Determinism: re-running produces an identical ordering (ties broken by name).
+    assert [c.slug for c in top] == [c.slug for c in top_by_priority(50)]
+
+
+def test_top_by_priority_respects_n():
+    assert len(top_by_priority(10)) == 10
+    assert len(top_by_priority(1000)) == len(COMPANY_REGISTRY)
+
+
+def test_tier_5_candidates_are_never_implemented():
+    # Phase 10 Step 4 Step 8: this phase is research/ranking only - nothing
+    # in the new broad candidate pool should have been implemented.
+    for c in get_by_tier(CompanyTier.TIER_5):
+        assert c.status != CompanyStatus.IMPLEMENTED, c.slug
+        assert c.scraper_module is None, c.slug
+
+
+def test_implemented_companies_are_not_tier_5():
+    for c in get_implemented():
+        assert c.tier != CompanyTier.TIER_5, c.slug
+
+
+def test_registry_has_at_least_250_companies_after_step_4_expansion():
+    # Sanity check on the Phase 10 Step 4 deliverable - guards against
+    # accidental truncation of the large candidate pool added this phase.
+    assert len(COMPANY_REGISTRY) >= 250
+
+
+def test_industry_diversity_of_candidate_pool():
+    # Phase 10 Step 4's explicit goal was breadth across business-internship-
+    # relevant industries, not a pile of easy-to-scrape but narrow sectors.
+    industries = {c.industry for c in get_by_tier(CompanyTier.TIER_5)}
+    assert len(industries) >= 15
