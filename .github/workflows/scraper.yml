@@ -20,7 +20,20 @@ permissions:
 jobs:
   scrape:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # Was 15 - measured at ~12-13 min for 40 sequential companies (Phase
+    # 10 Step 4); adding 8 more in Step 5 pushed a real run over 15 min
+    # and it was hard-canceled by the platform mid-run (2026-08-26,
+    # run 32914271497). Each company's run() commits in a single
+    # transaction at the end (see scrapers/base_scraper.py), so a
+    # mid-run cancellation only loses that cycle's update for whichever
+    # company was in flight - it cannot partially write or deactivate
+    # data - but every scraper after the cut-off point simply never
+    # runs that cycle. 40 minutes gives headroom for further company
+    # growth before this needs revisiting again; if the run
+    # consistently approaches this limit, the real fix is parallelizing
+    # scrapers (a matrix job or threaded scheduler), not just raising
+    # the number again.
+    timeout-minutes: 40
     env:
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
       RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
