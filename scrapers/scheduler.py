@@ -1,4 +1,4 @@
-"""Runs every registered company scraper in one pass.
+"""Runs every registered company scraper in one pass, in parallel.
 
 Invoked manually (`python -m scrapers.scheduler`) or on a schedule via
 the GitHub Actions workflow (`.github/workflows/scraper.yml`). Each
@@ -6,14 +6,32 @@ company scraper is isolated: one company's scraper raising (e.g. its
 career site is down or its API shape changed) is logged and skipped,
 never crashing the rest of the run or corrupting other companies' data
 (each scraper commits within its own `BaseScraper.run()` transaction).
+
+Parallel by design (Phase 10 Step 5 follow-up): a fully sequential run
+of 40 companies measured ~12-13 minutes; adding 8 more pushed a real
+run past GitHub Actions' job timeout and it was hard-canceled mid-run.
+Rather than keep raising the timeout as the registry grows toward
+~200 companies, scrapers run concurrently in a bounded thread pool.
+This is safe because `BaseScraper.run()` is fully self-contained per
+company - its own `requests.Session` (`scrapers/http_utils.new_session()`
+is called fresh inside `fetch_raw_listings()`, never shared across
+scrapers) and its own short-lived SQLAlchemy session/transaction
+(`backend/database/session.SessionLocal()`, opened and committed/closed
+entirely within that one company's `run()`) - so concurrent scrapers
+never share mutable state or a DB connection. Different companies also
+almost always live on entirely different hosts (different Workday
+tenants, different Greenhouse boards), so running them concurrently
+does not increase request pressure on any single company's career site
+beyond what that one company's own scraper already does by itself.
 """
 
 from __future__ import annotations
 
+import concurrent.futures
 import logging
 import sys
 
-from scrapers.base_scraper import BaseScraper
+from scrapers.base_scraper import BaseScraper, ScraperRunResult
 from scrapers.companies.abbott import AbbottScraper
 from scrapers.companies.abinbev import AnheuserBuschInBevScraper
 from scrapers.companies.aia import AIAScraper
@@ -125,17 +143,35 @@ SCRAPERS: list[type[BaseScraper]] = [
 ]
 
 
+# Bounded rather than "one thread per scraper": each concurrently-running
+# scraper holds at most one DB connection at a time (see backend/database/
+# session.py's pool_size/max_overflow, sized to comfortably exceed this),
+# and this is deliberately well under what a free-tier Postgres instance
+# is expected to tolerate. Raise this only alongside the DB pool size.
+MAX_PARALLEL_SCRAPERS = 8
+
+
+def _run_one(scraper_cls: type[BaseScraper]) -> ScraperRunResult:
+    return scraper_cls().run()
+
+
 def run_all() -> bool:
-    """Run every registered scraper. Returns False if any scraper failed outright."""
+    """Run every registered scraper, concurrently (bounded by
+    MAX_PARALLEL_SCRAPERS). Returns False if any scraper failed outright.
+    Blocks until every scraper has finished, same as the old sequential
+    version - callers don't need to change."""
     any_hard_failure = False
 
-    for scraper_cls in SCRAPERS:
-        try:
-            result = scraper_cls().run()
-            logger.info(result.summary())
-        except Exception:  # noqa: BLE001 - one company's scraper failing must not stop the others
-            any_hard_failure = True
-            logger.exception("%s: scraper run failed outright", scraper_cls.__name__)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=MAX_PARALLEL_SCRAPERS) as executor:
+        future_to_cls = {executor.submit(_run_one, scraper_cls): scraper_cls for scraper_cls in SCRAPERS}
+        for future in concurrent.futures.as_completed(future_to_cls):
+            scraper_cls = future_to_cls[future]
+            try:
+                result = future.result()
+                logger.info(result.summary())
+            except Exception:  # noqa: BLE001 - one company's scraper failing must not stop the others
+                any_hard_failure = True
+                logger.exception("%s: scraper run failed outright", scraper_cls.__name__)
 
     return not any_hard_failure
 
