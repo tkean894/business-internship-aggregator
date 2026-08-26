@@ -481,6 +481,39 @@ No new ATS integration was built or is recommended yet - Step 9's bar ("only bui
 
 Per this step's explicit instructions: no new scraper modules were added under `scrapers/companies/`, `scrapers/scheduler.py` was not touched, no database migration was written, the frontend was not touched, and no scraper was run against production. `tests/test_company_registry.py` gained coverage for the new scoring system (range checks, `priority_score` calculation, determinism of `top_by_priority`) and registry integrity (no duplicate names in addition to the existing no-duplicate-slugs check, Tier 5 candidates never `IMPLEMENTED`, industry diversity of the candidate pool) - all research/ranking/registry/test work, no implementation.
 
+## Implementation Notes (Phase 10 Step 5 — High-Priority Company Verification & Implementation)
+
+Goal: move from Step 4's research-only candidate pool into actual implementation, but re-verify every ATS estimate against the real live endpoint first rather than trusting the registry's sector-analogy guess - Step 4 was explicit that its Workday estimates were informed but unverified, and this step's own instructions required independent verification before implementing anything.
+
+### Five previously-deferred Workday tenants re-checked
+
+Truist, TD Bank, Accenture, 3M, and Verizon (all already `needs_review` from Steps 2-3) were re-verified live rather than assumed still blocked:
+
+- **Truist**: board grew to 1094 total (from 846); still no `workerSubType` facet; `searchText="intern"` now 853 (over cap, and matches unrelated titles like "One International Center"); `searchText="summer analyst"` only 6. Still blocked.
+- **TD Bank**: board grew to 1713 total (from 1516); still no employment-type facet; `searchText="co-op"` returns the exact same 1713 as unfiltered, confirming the search parameter provides no real narrowing on this tenant at all. Still blocked.
+- **Accenture**: `workerSubType` still repurposed as a 55-value "Skills" facet; `jobFamilyGroup` still a 40-value department breakdown; `searchText="intern"` still capped at the 2000 display maximum. Still blocked.
+- **3M**: this tenant's facet *set* was restructured since Step 3 (a new `jobFamilyGroup`/`Location_Country`/`remoteType` set replaced the old `Job_Area`) - a real infrastructure change - but the core blocker is unchanged: `workerSubType` is still only Regular/Temporary, and `searchText` still returns the entire unfiltered board regardless of query. Still blocked under a changed but equally blocked structure.
+- **Verizon**: retried after roughly a week; still HTTP 422/500 on the jobs API, robots.txt, and the career page itself, with a real browser User-Agent; Abbott on the same wd5 pod re-confirmed healthy in the same session. Genuine persistent tenant-level outage, not a transient blip. Still blocked.
+
+None of the five had a genuinely new, safe, bounded path this phase - all correctly remain `needs_review`, now with fresher evidence rather than stale Step 2/3 findings.
+
+### Eight companies implemented
+
+Procter & Gamble, Johnson & Johnson, Target, JLL, BlackRock, Caterpillar, Fidelity Investments, and UPS - each a small `WorkdayScraper` config, same one-file-per-company pattern as every prior phase. No shared-scraper-code changes were needed: all eight used existing, already-tested config mechanisms (`intern_facet_id` as a single value or an OR'd list, `search_text` fallback, or a no-facet whole-board scan for BlackRock's small 315-total board) - a good sign the architecture built across Steps 2-3 generalizes rather than needing per-tenant special-casing indefinitely.
+
+Two (BlackRock, Fidelity) yielded very few or zero current postings at verification time (2 and 0 respectively) - both are companies with well-documented large internship programs whose recruiting is between cycles right now (Fidelity's own site states Summer 2027 applications open Fall 2026); implemented anyway since the endpoint and logic are correct, consistent with the NY Fed/CIBC precedent from Step 2.
+
+### New ATS platforms discovered, not integrated
+
+Five genuinely new (to this project) ATS platforms were found and confirmed this phase, none of them Greenhouse/Workday/Lever:
+
+- **Oracle Cloud HCM (Oracle Recruiting Cloud)** - found independently at both JPMorgan Chase (`jpmc.fa.oraclecloud.com`) and Grant Thornton LLP's US entity (`ehzq.fa.us2.oraclecloud.com`) - two unrelated high-value companies on the same platform is the strongest signal in this project's history that a future integration might unlock real value, but the platform's public/unauthenticated access model was not evaluated this phase (out of scope - "stop and report, don't improvise" was the explicit instruction).
+- **Taleo (Oracle)** - UnitedHealth Group, via a TalentBrew front-end.
+- **iCIMS** - State Farm.
+- **SAP SuccessFactors** - ExxonMobil.
+
+None were built against. Per this step's explicit compliance rule, discovering a new platform is a stopping point for that company, not an invitation to improvise a scraper against an unevaluated endpoint. The Grant Thornton and State Farm/UnitedHealth/ExxonMobil registry entries were corrected from Step 4's Workday sector-analogy guess to reflect what was actually found - a concrete demonstration of why Step 4's estimates were explicitly labeled unverified.
+
 **Delivery cadence** (`send_pending_notifications`): a user's `frequency` preference controls *when* their already-eligible events get emailed, not whether eligibility is tracked. `immediate` is always due; `daily`/`weekly` compare `now - last_notified_at` against the interval. All of a user's currently-PENDING events (which may mix new-match and saved-inactive reasons) are batched into a single digest email per send, even for `immediate` - since this job only ever runs on the scraper's own 6-hour cadence (there is no separate always-on server that could deliver sooner), "immediate" in practice means "on the next scraper run," and batching avoids sending someone five separate emails for five things discovered in the same run. A user with `email_enabled=False` or `frequency=off` is skipped entirely at send time; their events stay `PENDING` and become eligible for delivery automatically if they re-enable notifications later - nothing is lost, nothing is force-flushed.
 
 A failed send (`EmailSendError`) marks every event in that attempt `FAILED` with a truncated `error_message`, never `SENT` - `tests/test_notifications.py::test_failed_email_marks_events_failed_not_sent` asserts this directly, including that `sent_at` stays `None`. A failed digest is not retried by this run (the next scheduled run will pick up any *new* eligible events, but the failed ones stay `FAILED`, visible for manual investigation, rather than being silently retried into a potential duplicate).

@@ -21,13 +21,16 @@ from scrapers.companies.airbus import AirbusScraper
 from scrapers.companies.appliedmaterials import AppliedMaterialsScraper
 from scrapers.companies.assurant import AssurantScraper
 from scrapers.companies.barclays import BarclaysScraper
+from scrapers.companies.blackrock import BlackRockScraper
 from scrapers.companies.boeing import BoeingScraper
 from scrapers.companies.braze import BrazeScraper
+from scrapers.companies.caterpillar import CaterpillarScraper
 from scrapers.companies.chevron import ChevronScraper
 from scrapers.companies.cibc import CIBCScraper
 from scrapers.companies.cloudflare import CloudflareScraper
 from scrapers.companies.cox import CoxEnterprisesScraper
 from scrapers.companies.disney import DisneyScraper
+from scrapers.companies.fidelity import FidelityScraper
 from scrapers.companies.geaerospace import GEAerospaceScraper
 from scrapers.companies.globalfoundries import GlobalFoundriesScraper
 from scrapers.companies.guidehouse import GuidehouseScraper
@@ -35,6 +38,8 @@ from scrapers.companies.hcvt import HCVTScraper
 from scrapers.companies.icf import ICFInternationalScraper
 from scrapers.companies.iff import IFFScraper
 from scrapers.companies.invesco import InvescoScraper
+from scrapers.companies.jll import JLLScraper
+from scrapers.companies.jnj import JNJScraper
 from scrapers.companies.magna import MagnaScraper
 from scrapers.companies.marathonpetroleum import MarathonPetroleumScraper
 from scrapers.companies.medline import MedlineScraper
@@ -44,6 +49,7 @@ from scrapers.companies.nyfed import NewYorkFedScraper
 from scrapers.companies.pipersandler import PiperSandlerScraper
 from scrapers.companies.polaris import PolarisScraper
 from scrapers.companies.primient import PrimientScraper
+from scrapers.companies.procterandgamble import ProcterAndGambleScraper
 from scrapers.companies.pwc import PwCScraper
 from scrapers.companies.racetrac import RaceTracScraper
 from scrapers.companies.redventures import RedVenturesScraper
@@ -53,7 +59,9 @@ from scrapers.companies.saputo import SaputoScraper
 from scrapers.companies.smucker import SmuckerScraper
 from scrapers.companies.spacex import SpaceXScraper
 from scrapers.companies.spothopper import SpotHopperScraper
+from scrapers.companies.target import TargetScraper
 from scrapers.companies.texascapitalbank import TexasCapitalBankScraper
+from scrapers.companies.ups import UPSScraper
 
 logger = logging.getLogger(__name__)
 
@@ -103,6 +111,15 @@ SCRAPERS: list[type[BaseScraper]] = [
     MedlineScraper,
     AirbusScraper,
     ICFInternationalScraper,
+    # Workday (Phase 10 Step 5 - high-priority company batch)
+    ProcterAndGambleScraper,
+    JNJScraper,
+    TargetScraper,
+    JLLScraper,
+    BlackRockScraper,
+    CaterpillarScraper,
+    FidelityScraper,
+    UPSScraper,
     # Lever
     HCVTScraper,
 ]
