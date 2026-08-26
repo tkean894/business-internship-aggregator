@@ -80,3 +80,30 @@ def test_full_time_analyst_without_summer_is_not_an_internship():
     assert classify_internship("Investment Banking Analyst") is None
     assert classify_internship("Equity Research Associate - Large Cap Banks") is None
     assert classify_internship("Investment Banking Associate - Chemicals") is None
+
+
+def test_consultant_noun_maps_to_consulting():
+    # Phase 10 Step 6: Marsh McLennan's Oliver Wyman postings are
+    # frequently titled with the noun "Consultant" rather than
+    # "Consulting" - real, recurring live titles.
+    assert classify_internship("Oliver Wyman - Consultant Intern (m/f/d) 2027 - Copenhagen") == InternshipCategory.CONSULTING
+    assert classify_internship("OLIVER WYMAN - INTERN CONSULTANT - 2026 - NETHERLANDS") == InternshipCategory.CONSULTING
+
+
+def test_banking_maps_to_finance():
+    # Phase 10 Step 6: real, recurring across two unrelated companies -
+    # PNC ("Corporate & Institutional Banking Undergraduate Intern -
+    # Commercial & Corporate Banking") and Wells Fargo ("Consumer
+    # Banking and Lending Summer Internship", "Commercial Banking Summer
+    # Internship") - both previously fell to OTHER.
+    assert classify_internship("Corporate & Institutional Banking Undergraduate Intern - Commercial & Corporate Banking") == InternshipCategory.FINANCE
+    assert classify_internship("Consumer Banking and Lending Summer Internship") == InternshipCategory.FINANCE
+
+
+def test_banking_keyword_does_not_override_more_specific_analytics_match():
+    # Deliberately did NOT add "capital markets" as its own Finance
+    # keyword (see scrapers/classification.py) - it would, as the longer
+    # match, override the existing correct "analytics" match on real
+    # Wells Fargo postings like this one.
+    result = classify_internship("2027 Quantitative Analytics Summer Internship Capital Markets (Masters) - Early Careers")
+    assert result == InternshipCategory.BUSINESS_ANALYTICS

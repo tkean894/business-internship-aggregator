@@ -46,6 +46,7 @@ from scrapers.companies.caterpillar import CaterpillarScraper
 from scrapers.companies.chevron import ChevronScraper
 from scrapers.companies.cibc import CIBCScraper
 from scrapers.companies.cloudflare import CloudflareScraper
+from scrapers.companies.cocacola import CocaColaScraper
 from scrapers.companies.cox import CoxEnterprisesScraper
 from scrapers.companies.disney import DisneyScraper
 from scrapers.companies.fidelity import FidelityScraper
@@ -60,14 +61,17 @@ from scrapers.companies.jll import JLLScraper
 from scrapers.companies.jnj import JNJScraper
 from scrapers.companies.magna import MagnaScraper
 from scrapers.companies.marathonpetroleum import MarathonPetroleumScraper
+from scrapers.companies.marshmclennan import MarshMcLennanScraper
 from scrapers.companies.medline import MedlineScraper
 from scrapers.companies.medtronic import MedtronicScraper
 from scrapers.companies.mksinstruments import MKSInstrumentsScraper
 from scrapers.companies.nyfed import NewYorkFedScraper
 from scrapers.companies.pipersandler import PiperSandlerScraper
+from scrapers.companies.pnc import PNCScraper
 from scrapers.companies.polaris import PolarisScraper
 from scrapers.companies.primient import PrimientScraper
 from scrapers.companies.procterandgamble import ProcterAndGambleScraper
+from scrapers.companies.prudential import PrudentialScraper
 from scrapers.companies.pwc import PwCScraper
 from scrapers.companies.racetrac import RaceTracScraper
 from scrapers.companies.redventures import RedVenturesScraper
@@ -79,7 +83,12 @@ from scrapers.companies.spacex import SpaceXScraper
 from scrapers.companies.spothopper import SpotHopperScraper
 from scrapers.companies.target import TargetScraper
 from scrapers.companies.texascapitalbank import TexasCapitalBankScraper
+from scrapers.companies.troweprice import TRowePriceScraper
+from scrapers.companies.unilever import UnileverScraper
 from scrapers.companies.ups import UPSScraper
+from scrapers.companies.usaa import USAAScraper
+from scrapers.companies.vanguard import VanguardScraper
+from scrapers.companies.wellsfargo import WellsFargoScraper
 
 logger = logging.getLogger(__name__)
 
@@ -138,6 +147,16 @@ SCRAPERS: list[type[BaseScraper]] = [
     CaterpillarScraper,
     FidelityScraper,
     UPSScraper,
+    # Workday (Phase 10 Step 6 - top business internship employer batch)
+    CocaColaScraper,
+    TRowePriceScraper,
+    MarshMcLennanScraper,
+    WellsFargoScraper,
+    VanguardScraper,
+    PrudentialScraper,
+    USAAScraper,
+    UnileverScraper,
+    PNCScraper,
     # Lever
     HCVTScraper,
 ]

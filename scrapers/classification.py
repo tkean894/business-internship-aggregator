@@ -119,12 +119,32 @@ CATEGORY_KEYWORDS: list[tuple[InternshipCategory, tuple[str, ...]]] = [
         # (too little distinct volume yet to split out, per the "only add
         # a category if there are enough real postings" rule).
         "investment", "investments", "risk", "actuarial", "equity", "equities",
+        # Phase 10 Step 6: real, recurring across TWO unrelated companies
+        # (PNC's "Corporate & Institutional Banking Undergraduate Intern -
+        # Commercial & Corporate Banking", Wells Fargo's "Consumer Banking
+        # and Lending Summer Internship" / "Commercial Banking Summer
+        # Internship") - all were falling to OTHER despite being
+        # unambiguously financial-services roles. Deliberately NOT adding
+        # "capital markets" alongside it - it would (as the longer match)
+        # override the existing, already-correct "analytics" match on
+        # real postings like Wells Fargo's "Quantitative Analytics Summer
+        # Internship ... Capital Markets (PhD)", which is genuinely more
+        # an analytics program than a banking one.
+        "banking",
     )),
     (InternshipCategory.ACCOUNTING, (
         "accounting", "audit",
         "tax",  # Phase 8: HCVT (tax/accounting firm) - "Tax Internship", "International Tax Internship", etc.
     )),
-    (InternshipCategory.CONSULTING, ("consulting", "advisory", "professional services")),
+    (InternshipCategory.CONSULTING, (
+        "consulting", "advisory", "professional services",
+        # Phase 10 Step 6: Marsh McLennan's Oliver Wyman postings are
+        # frequently titled "... Consultant Intern ..." or "Intern
+        # Consultant" (the noun "Consultant", not "Consulting") - a real,
+        # recurring pattern at a company whose entire business IS
+        # consulting, previously falling to OTHER.
+        "consultant",
+    )),
     (InternshipCategory.MARKETING, ("marketing", "brand", "growth", "communications")),
     (InternshipCategory.SUPPLY_CHAIN, ("supply chain", "logistics", "procurement")),
     (InternshipCategory.OPERATIONS, ("operations", "ops")),
