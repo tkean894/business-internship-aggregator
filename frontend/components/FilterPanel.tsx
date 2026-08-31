@@ -3,7 +3,7 @@
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useTransition } from "react";
 
-import { CANADA_LOCATION_FILTER_VALUE, US_LOCATION_FILTER_VALUE } from "@/lib/location";
+import { ALL_LOCATIONS_FILTER_VALUE, CANADA_LOCATION_FILTER_VALUE, US_LOCATION_FILTER_VALUE } from "@/lib/location";
 
 interface FilterPanelProps {
   categories: string[];
@@ -130,10 +130,16 @@ export default function FilterPanel({
             onChange={(e) => updateParam("location", e.target.value)}
             className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-slate-500 focus:outline-none focus:ring-2 focus:ring-slate-200"
           >
-            <option value="">All locations</option>
+            {/* The default, preselected option - no `location` param in
+                the URL at all. Labeled for what it actually does (US &
+                Canada only), not "All locations" - see
+                ALL_LOCATIONS_FILTER_VALUE below for the real "everything,
+                worldwide" choice. */}
+            <option value="">US &amp; Canada</option>
+            <option value={ALL_LOCATIONS_FILTER_VALUE}>All locations (worldwide)</option>
             <optgroup label="Country">
-              <option value={US_LOCATION_FILTER_VALUE}>United States</option>
-              <option value={CANADA_LOCATION_FILTER_VALUE}>Canada</option>
+              <option value={US_LOCATION_FILTER_VALUE}>United States only</option>
+              <option value={CANADA_LOCATION_FILTER_VALUE}>Canada only</option>
             </optgroup>
             <optgroup label="Specific location">
               {locations.map((loc) => (

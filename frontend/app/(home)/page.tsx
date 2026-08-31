@@ -9,6 +9,7 @@ import SearchBar from "@/components/SearchBar";
 import SortSelect from "@/components/SortSelect";
 import { getAllInternships, getCategories, getCompanies } from "@/lib/api";
 import {
+  ALL_LOCATIONS_FILTER_VALUE,
   CANADA_LOCATION_FILTER_VALUE,
   isCanadaLocation,
   isUsLocation,
@@ -43,30 +44,45 @@ export default async function HomePage({ searchParams }: HomePageProps) {
 
   const hasActiveFilters = Boolean(search || category || company || location || industry);
 
-  // "United States"/"Canada" are reserved dropdown values, not real
-  // location strings (see lib/location.ts) - the backend's `location`
-  // filter does a plain ILIKE substring match, which can't express "any
-  // US location" (most real values are "City, ST", never the literal
-  // words "United States"). For these two, skip the backend-level
-  // narrowing entirely and filter by country client-side instead, same
-  // as the general US/Canada display filter already does below.
-  const isCountryFilter = location === US_LOCATION_FILTER_VALUE || location === CANADA_LOCATION_FILTER_VALUE;
+  // "United States"/"Canada"/"All locations" are reserved dropdown
+  // values, not real location strings (see lib/location.ts) - the
+  // backend's `location` filter does a plain ILIKE substring match,
+  // which can't express "any US location" (most real values are "City,
+  // ST", never the literal words "United States"). For these three,
+  // skip the backend-level narrowing entirely and filter (or don't)
+  // client-side instead, same as the general US/Canada display filter
+  // already does below.
+  const isCountryFilter =
+    location === US_LOCATION_FILTER_VALUE ||
+    location === CANADA_LOCATION_FILTER_VALUE ||
+    location === ALL_LOCATIONS_FILTER_VALUE;
   const backendLocation = isCountryFilter ? undefined : location;
+  // No `location` param at all is the default a first-time visitor
+  // lands on - preselected as "US & Canada" in the filter dropdown
+  // (FilterPanel.tsx renders that as its blank/default option), not
+  // "All locations". Selecting "All locations (worldwide)" explicitly
+  // is the only way to see non-US/Canada postings - `() => true` skips
+  // country filtering entirely rather than narrowing it.
   const displayFilter =
     location === US_LOCATION_FILTER_VALUE
       ? isUsLocation
       : location === CANADA_LOCATION_FILTER_VALUE
         ? isCanadaLocation
-        : isUsOrCanadaLocation;
+        : location === ALL_LOCATIONS_FILTER_VALUE
+          ? () => true
+          : isUsOrCanadaLocation;
   // The "N ... internships found" count below reflects whichever filter
   // is active, so its label should too - "US & Canada-based" is
-  // misleading directly under a result set that's actually Canada-only.
+  // misleading directly under a result set that's actually Canada-only
+  // (or, now, worldwide).
   const foundLabel =
     location === US_LOCATION_FILTER_VALUE
       ? "US-based"
       : location === CANADA_LOCATION_FILTER_VALUE
         ? "Canada-based"
-        : "US & Canada-based";
+        : location === ALL_LOCATIONS_FILTER_VALUE
+          ? ""
+          : "US & Canada-based";
 
   const { getToken } = await auth();
   const token = await getToken();
@@ -170,7 +186,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
       </div>
 
       <p className="mb-4 text-sm text-slate-500">
-        {totalNaInternships} {foundLabel} internship{totalNaInternships === 1 ? "" : "s"} found
+        {totalNaInternships} {foundLabel ? `${foundLabel} ` : ""}internship{totalNaInternships === 1 ? "" : "s"} found
       </p>
 
       {visibleItems.length === 0 ? (

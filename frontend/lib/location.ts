@@ -159,19 +159,28 @@ export function isUsOrCanadaLocation(location: string | null | undefined): boole
 }
 
 // Reserved sentinel values for the location filter dropdown's "United
-// States" / "Canada" options (FilterPanel.tsx), distinct from any real
-// scraped location string so they can never collide with one (confirmed
-// no current data is literally just "United States" or "Canada" with
-// nothing else, but a reserved token is correct regardless of today's
-// data). The homepage (app/(home)/page.tsx) recognizes these and
-// applies isUsLocation/isCanadaLocation instead of an exact-match
-// backend query when one is selected.
+// States" / "Canada" / "All locations" options (FilterPanel.tsx),
+// distinct from any real scraped location string so they can never
+// collide with one (confirmed no current data is literally just "United
+// States"/"Canada" with nothing else, but a reserved token is correct
+// regardless of today's data). The homepage (app/(home)/page.tsx)
+// recognizes these and applies isUsLocation/isCanadaLocation/no filter
+// at all instead of an exact-match backend query when one is selected.
 export const US_LOCATION_FILTER_VALUE = "__country_us__";
 export const CANADA_LOCATION_FILTER_VALUE = "__country_ca__";
+// No `location` param at all (the default a first-time visitor lands
+// on) is handled as US & Canada, same as this sentinel - see
+// isUsOrCanadaLocation's own callers. This one only exists so the
+// dropdown can offer "All locations" (worldwide, no country filtering)
+// as a distinct, real choice alongside that default, rather than the
+// previous behavior where the blank/default option was mislabeled "All
+// locations" while actually still only showing US & Canada.
+export const ALL_LOCATIONS_FILTER_VALUE = "__all_locations__";
 
 const LOCATION_FILTER_LABELS: Record<string, string> = {
   [US_LOCATION_FILTER_VALUE]: "United States",
   [CANADA_LOCATION_FILTER_VALUE]: "Canada",
+  [ALL_LOCATIONS_FILTER_VALUE]: "All locations",
 };
 
 /** Human-readable label for a location filter value - a real location
