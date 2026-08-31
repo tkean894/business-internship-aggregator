@@ -559,6 +559,43 @@ Reviewed real postings from all nine new companies before touching `scrapers/cla
 
 Re-running the three affected companies' scrapers against already-stored postings reclassified 14 previously-OTHER internships correctly (Marsh McLennan 11→7 OTHER, PNC 11→5 OTHER, Wells Fargo 6→2 OTHER) while leaving genuinely ambiguous titles (e.g. bare "Insurance Intern", "PNC Wealth Management Summer Intern") as OTHER, per this step's explicit "Other is acceptable" instruction.
 
+## Implementation Notes (Phase 10 Step 7 — High-Value Company Expansion & ATS Research)
+
+Goal: continue toward the top ~200 employers with the same live-verification standard, diversified across business career paths (Finance, IB, Consulting, CPG, Insurance, Real Estate, Automotive).
+
+### Eleven companies implemented
+
+Citigroup, General Motors, Allstate, Mondelez International, Capital One, Booz Allen Hamilton, Prologis, Simon Property Group, Kraft Heinz, Merck & Co., and The Travelers Companies - all `WorkdayScraper` configs, no shared-code changes needed. Two real findings worth flagging:
+
+- **Citigroup** was Step 4's one bulge-bracket-bank guess to actually pan out - confirmed Workday (an unusual numeric site identifier, "2"), unlike every other bulge-bracket bank checked this project (Goldman Sachs, Morgan Stanley, Bank of America all remain unconfirmed/on other platforms).
+- Three companies (Allstate, Prologis, Travelers-adjacent patterns) had confirmed-real intern postings found during research that had fully closed by verification time (Allstate: exhaustively checked all 465 board entries, zero matches; Prologis: same, all 67 entries) - genuine posting churn/seasonal-recruiting-calendar snapshots (Prologis's own site states Summer Internship applications open in October), not scraper defects. Implemented anyway per the established NY Fed/CIBC/Fidelity precedent.
+
+### Bank of America: a real Workday-but-wrong-board finding
+
+Live-checked and confirmed BofA genuinely runs Workday (`ghr.wd1.myworkdayjobs.com/Lateral-US`) - but only for **experienced/lateral hires**. Campus recruiting and internships route through an entirely separate platform (`bankcampuscareers.tal.net` - Cornerstone OnDemand's TalentLink product). Implementing the confirmed Workday board would not actually have captured any internships - a distinct failure mode from every prior "wrong platform" finding (this one is the *right* platform for the *wrong* population), caught only because the actual internship-specific pages were checked rather than stopping at "Workday confirmed."
+
+### Further corrections to Step 4's Workday sector-analogy guesses
+
+Nine more companies had their Step 4 "Workday estimated by sector analogy" guess checked directly this phase: **Eli Lilly** (a real Workday tenant exists but returns persistent HTTP 500/422 on both the API and the career page itself - a genuine outage, not a wrong guess, and the company's own internship page now points to a RippleMatch talent community instead), **Nestle USA** (no Workday evidence; found a "Olivia" AI conversational-application-assistant reference, plausibly Paradox.ai's product layered over an unidentified backend), **Hershey, Colgate-Palmolive, Liberty Mutual, Willis Towers Watson, West Monroe** (no Workday evidence found for any of these five), and **IBM** (no Workday evidence; instead found a `careers.ibm.com/en_US/careers/JobDetail/{title}/{id}` URL pattern - the same pattern independently found at CBRE, suggesting a shared platform vendor, plausibly SAP SuccessFactors Career Site Builder, not confirmed). All corrected from `researched` to `needs_review` with the real finding documented, none guessed further.
+
+### Confirmed-Workday tenants deferred for the established "no safe narrowing" reason
+
+**State Street, U.S. Bancorp, Cushman & Wakefield** all have real, live-verified Workday tenants (not guessed), but none has a usable employment-type facet and each tenant's `searchText="intern"` fallback is both over the 500-result pagination cap and too noisy (false-positive substring matches like "Working Student", "International Banking Ops", "International Dr") to trust - the same pattern already established at Truist/TD/3M/Home Depot/Nike in Steps 5-6. Deferred, not forced.
+
+### KPMG: genuinely ambiguous between two real platforms
+
+Unlike Deloitte/EY (no platform evidence at all), KPMG surfaced TWO distinct real platforms - Oracle Cloud HCM for the "KPMG Global Services" division specifically, and Avature for campus recruiting (plausibly the more relevant one, since internships are campus recruiting) - but neither was confirmed as the actual board for KPMG's general US internship program, and Avature's public-access model was not evaluated this session. Left `needs_review` rather than guessing which one is authoritative.
+
+### Classification: two exclusion gaps and two new keywords, all found via real postings
+
+Reviewed real postings from all eleven new companies before touching `scrapers/classification.py`:
+
+- **"software developer" and "cybersecurity" (one word) added to `EXCLUDE_KEYWORDS`** - Booz Allen Hamilton's board revealed 9 real postings ("AI Software Developer Intern", 7× "Summer Games Software Developer Intern", "Cybersecurity Analyst Intern") that were landing in OTHER instead of being excluded as technical - the existing "software engineer" keyword doesn't cover "Software Developer" as a distinct common phrasing, and the existing "cyber security" (two words) doesn't cover the equally common one-word spelling. Re-running the scraper after the fix correctly deactivated all 9 (they no longer classify as relevant internships at all) via the existing lifecycle logic - no data was deleted, just correctly marked inactive.
+- **"wealth" added to Finance** - Citigroup's "Wealth - Citigold, Summer Analyst" / "Wealth - Private Bank, Summer Analyst" postings (4 real instances) were falling to OTHER despite Wealth Management being an explicit target business function for this platform.
+- **"hr" (bare abbreviation) added to Human Resources** - Kraft Heinz's bare "HR Intern" posting was falling to OTHER; same short-abbreviation precedent already established for "ops" under Operations, word-boundary matched so it only fires on "HR" as its own word (verified via a regression test against a title with "hr" embedded mid-word, which correctly does not match).
+
+Four new regression tests cover all four changes, including the "does NOT false-positive" case for the abbreviation. 109 tests passing (up from 105), zero regressions.
+
 **Delivery cadence** (`send_pending_notifications`): a user's `frequency` preference controls *when* their already-eligible events get emailed, not whether eligibility is tracked. `immediate` is always due; `daily`/`weekly` compare `now - last_notified_at` against the interval. All of a user's currently-PENDING events (which may mix new-match and saved-inactive reasons) are batched into a single digest email per send, even for `immediate` - since this job only ever runs on the scraper's own 6-hour cadence (there is no separate always-on server that could deliver sooner), "immediate" in practice means "on the next scraper run," and batching avoids sending someone five separate emails for five things discovered in the same run. A user with `email_enabled=False` or `frequency=off` is skipped entirely at send time; their events stay `PENDING` and become eligible for delivery automatically if they re-enable notifications later - nothing is lost, nothing is force-flushed.
 
 A failed send (`EmailSendError`) marks every event in that attempt `FAILED` with a truncated `error_message`, never `SENT` - `tests/test_notifications.py::test_failed_email_marks_events_failed_not_sent` asserts this directly, including that `sent_at` stays `None`. A failed digest is not retried by this run (the next scheduled run will pick up any *new* eligible events, but the failed ones stay `FAILED`, visible for manual investigation, rather than being silently retried into a potential duplicate).

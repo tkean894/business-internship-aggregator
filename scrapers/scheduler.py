@@ -36,21 +36,26 @@ from scrapers.companies.abbott import AbbottScraper
 from scrapers.companies.abinbev import AnheuserBuschInBevScraper
 from scrapers.companies.aia import AIAScraper
 from scrapers.companies.airbus import AirbusScraper
+from scrapers.companies.allstate import AllstateScraper
 from scrapers.companies.appliedmaterials import AppliedMaterialsScraper
 from scrapers.companies.assurant import AssurantScraper
 from scrapers.companies.barclays import BarclaysScraper
 from scrapers.companies.blackrock import BlackRockScraper
 from scrapers.companies.boeing import BoeingScraper
+from scrapers.companies.boozallen import BoozAllenScraper
 from scrapers.companies.braze import BrazeScraper
+from scrapers.companies.capitalone import CapitalOneScraper
 from scrapers.companies.caterpillar import CaterpillarScraper
 from scrapers.companies.chevron import ChevronScraper
 from scrapers.companies.cibc import CIBCScraper
+from scrapers.companies.citigroup import CitigroupScraper
 from scrapers.companies.cloudflare import CloudflareScraper
 from scrapers.companies.cocacola import CocaColaScraper
 from scrapers.companies.cox import CoxEnterprisesScraper
 from scrapers.companies.disney import DisneyScraper
 from scrapers.companies.fidelity import FidelityScraper
 from scrapers.companies.geaerospace import GEAerospaceScraper
+from scrapers.companies.generalmotors import GeneralMotorsScraper
 from scrapers.companies.globalfoundries import GlobalFoundriesScraper
 from scrapers.companies.guidehouse import GuidehouseScraper
 from scrapers.companies.hcvt import HCVTScraper
@@ -59,18 +64,22 @@ from scrapers.companies.iff import IFFScraper
 from scrapers.companies.invesco import InvescoScraper
 from scrapers.companies.jll import JLLScraper
 from scrapers.companies.jnj import JNJScraper
+from scrapers.companies.kraftheinz import KraftHeinzScraper
 from scrapers.companies.magna import MagnaScraper
 from scrapers.companies.marathonpetroleum import MarathonPetroleumScraper
 from scrapers.companies.marshmclennan import MarshMcLennanScraper
 from scrapers.companies.medline import MedlineScraper
 from scrapers.companies.medtronic import MedtronicScraper
+from scrapers.companies.merck import MerckScraper
 from scrapers.companies.mksinstruments import MKSInstrumentsScraper
+from scrapers.companies.mondelez import MondelezScraper
 from scrapers.companies.nyfed import NewYorkFedScraper
 from scrapers.companies.pipersandler import PiperSandlerScraper
 from scrapers.companies.pnc import PNCScraper
 from scrapers.companies.polaris import PolarisScraper
 from scrapers.companies.primient import PrimientScraper
 from scrapers.companies.procterandgamble import ProcterAndGambleScraper
+from scrapers.companies.prologis import PrologisScraper
 from scrapers.companies.prudential import PrudentialScraper
 from scrapers.companies.pwc import PwCScraper
 from scrapers.companies.racetrac import RaceTracScraper
@@ -78,11 +87,13 @@ from scrapers.companies.redventures import RedVenturesScraper
 from scrapers.companies.robinhood import RobinhoodScraper
 from scrapers.companies.rocketlab import RocketLabScraper
 from scrapers.companies.saputo import SaputoScraper
+from scrapers.companies.simonpropertygroup import SimonPropertyGroupScraper
 from scrapers.companies.smucker import SmuckerScraper
 from scrapers.companies.spacex import SpaceXScraper
 from scrapers.companies.spothopper import SpotHopperScraper
 from scrapers.companies.target import TargetScraper
 from scrapers.companies.texascapitalbank import TexasCapitalBankScraper
+from scrapers.companies.travelers import TravelersScraper
 from scrapers.companies.troweprice import TRowePriceScraper
 from scrapers.companies.unilever import UnileverScraper
 from scrapers.companies.ups import UPSScraper
@@ -157,6 +168,18 @@ SCRAPERS: list[type[BaseScraper]] = [
     USAAScraper,
     UnileverScraper,
     PNCScraper,
+    # Workday (Phase 10 Step 7 - high-value company batch)
+    CitigroupScraper,
+    GeneralMotorsScraper,
+    AllstateScraper,
+    MondelezScraper,
+    CapitalOneScraper,
+    BoozAllenScraper,
+    PrologisScraper,
+    SimonPropertyGroupScraper,
+    KraftHeinzScraper,
+    MerckScraper,
+    TravelersScraper,
     # Lever
     HCVTScraper,
 ]

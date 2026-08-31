@@ -107,3 +107,39 @@ def test_banking_keyword_does_not_override_more_specific_analytics_match():
     # Wells Fargo postings like this one.
     result = classify_internship("2027 Quantitative Analytics Summer Internship Capital Markets (Masters) - Early Careers")
     assert result == InternshipCategory.BUSINESS_ANALYTICS
+
+
+def test_software_developer_and_cybersecurity_are_excluded_as_technical():
+    # Phase 10 Step 7: real Booz Allen Hamilton postings - "Software
+    # Developer" (not caught by the existing "software engineer"
+    # keyword) and "Cybersecurity" as one word (not caught by the
+    # existing two-word "cyber security" phrase) - were falling to
+    # OTHER instead of being excluded as technical roles.
+    assert classify_internship("AI Software Developer Intern") is None
+    assert classify_internship("University - 2027 Summer Games Software Developer Intern") is None
+    assert classify_internship("University - Summer 27, Cybersecurity Analyst Intern") is None
+    # The existing two-word phrasing must keep working too.
+    assert classify_internship("Intern, Cyber Security") is None
+
+
+def test_wealth_maps_to_finance():
+    # Phase 10 Step 7: real, recurring Citigroup postings ("Wealth -
+    # Citigold, Summer Analyst", "Wealth - Private Bank, Summer
+    # Analyst") were falling to OTHER despite Wealth Management being
+    # an explicit target business function for this platform.
+    assert classify_internship("Wealth - Citigold, Summer Analyst, Singapore, 2027") == InternshipCategory.FINANCE
+    assert classify_internship("Wealth - Private Bank, Summer Analyst, Hong Kong, 2027") == InternshipCategory.FINANCE
+
+
+def test_bare_hr_maps_to_human_resources():
+    # Phase 10 Step 7: real Kraft Heinz posting titled bare "HR Intern"
+    # (not caught by the existing spelled-out "human resources"
+    # keyword) was falling to OTHER.
+    assert classify_internship("HR Intern") == InternshipCategory.HUMAN_RESOURCES
+
+
+def test_bare_hr_keyword_has_a_real_word_boundary_not_a_substring_match():
+    # "hr" must not fire on a title where those two letters appear
+    # embedded inside a longer, unrelated word.
+    result = classify_internship("Chromatography Intern")
+    assert result != InternshipCategory.HUMAN_RESOURCES

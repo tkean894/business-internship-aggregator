@@ -95,6 +95,15 @@ EXCLUDE_KEYWORDS = (
     "embedded engineer", "embedded systems",
     "cyber security",        # AIA: "Intern, Cyber Security"
     "it intern",             # AIA/Chevron: bare "IT Intern" - IT helpdesk/systems, not a business function
+    # Phase 10 Step 7 additions - found via real Booz Allen Hamilton
+    # postings that were falling to OTHER instead of being excluded as
+    # technical: "Software Developer Intern"/"AI Software Developer
+    # Intern" (a real, common alternate phrasing for "Software Engineer"
+    # not covered by that keyword) and "Cybersecurity Analyst Intern"
+    # (the one-word spelling - the existing "cyber security" two-word
+    # phrase doesn't match it; both spellings are kept rather than one
+    # replacing the other).
+    "software developer", "cybersecurity",
 )
 
 # (category, keyword) pairs. Deliberately keyed on specific function terms
@@ -131,6 +140,14 @@ CATEGORY_KEYWORDS: list[tuple[InternshipCategory, tuple[str, ...]]] = [
         # Internship ... Capital Markets (PhD)", which is genuinely more
         # an analytics program than a banking one.
         "banking",
+        # Phase 10 Step 7: Citigroup's "Wealth - Citigold, Summer Analyst"
+        # and "Wealth - Private Bank, Summer Analyst" postings (4 real,
+        # recurring instances) were falling to OTHER - Wealth Management
+        # is an explicit target business function for this platform, and
+        # "wealth" as a bare word in an internship title (already
+        # pre-filtered to real internship postings) unambiguously means
+        # wealth management, not a false-positive risk.
+        "wealth",
     )),
     (InternshipCategory.ACCOUNTING, (
         "accounting", "audit",
@@ -155,6 +172,13 @@ CATEGORY_KEYWORDS: list[tuple[InternshipCategory, tuple[str, ...]]] = [
         # legitimate HR sub-function (L&D) that the original keyword list
         # had no synonym for and would have fallen to OTHER.
         "learning & development", "learning and development",
+        # Phase 10 Step 7: Kraft Heinz's bare "HR Intern" posting was
+        # falling to OTHER - the existing "human resources" keyword
+        # requires the spelled-out phrase. Same short-abbreviation
+        # precedent as "ops" under Operations above; word-boundary
+        # matched so it only fires on "HR" as its own word, not embedded
+        # inside another word.
+        "hr",
     )),
     (InternshipCategory.PRODUCT_MANAGEMENT, ("product manager", "product management", "associate product manager")),
     (InternshipCategory.BUSINESS_ANALYTICS, ("business analyst", "business analytics", "market research", "data analyst", "analytics")),
