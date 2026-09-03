@@ -152,6 +152,18 @@ CATEGORY_KEYWORDS: list[tuple[InternshipCategory, tuple[str, ...]]] = [
     (InternshipCategory.ACCOUNTING, (
         "accounting", "audit",
         "tax",  # Phase 8: HCVT (tax/accounting firm) - "Tax Internship", "International Tax Internship", etc.
+        # Phase 10 Step 8: PwC's "Assurance" practice (Big 4 industry-
+        # standard term for audit/attestation services) - ~30 real,
+        # recurring postings ("Intern - Assurance", "Financial Services
+        # Assurance - Off-Cycle Internship", "Assurance CPA - Summer
+        # Intern") were falling to OTHER despite being unambiguously
+        # accounting/audit roles. Verified zero regressions against
+        # existing data: same length as FINANCE's "financial" keyword,
+        # but CATEGORY_KEYWORDS iterates FINANCE first and the longest-
+        # match comparison is strict `>`, so titles like "Assurance
+        # (Financial Services)" that already correctly matched Finance
+        # keep doing so.
+        "assurance",
     )),
     (InternshipCategory.CONSULTING, (
         "consulting", "advisory", "professional services",
@@ -164,7 +176,22 @@ CATEGORY_KEYWORDS: list[tuple[InternshipCategory, tuple[str, ...]]] = [
     )),
     (InternshipCategory.MARKETING, ("marketing", "brand", "growth", "communications")),
     (InternshipCategory.SUPPLY_CHAIN, ("supply chain", "logistics", "procurement")),
-    (InternshipCategory.OPERATIONS, ("operations", "ops")),
+    (InternshipCategory.OPERATIONS, (
+        "operations", "ops",
+        # Phase 10 Step 8: Target's "Operation Manager Intern" postings
+        # (30 real, recurring instances across distribution centers) use
+        # the singular "Operation", not "Operations" - the existing
+        # keyword requires the plural and all 30 were falling to OTHER.
+        # The same company's "Operations Manager Intern" (plural) titles
+        # already classified correctly, confirming this was purely a
+        # singular/plural gap, not a different role type. Since
+        # "operation" (9 chars) is longer than SALES's "sales" (5 chars),
+        # this does reclassify one existing title, "Intern, Content Sales
+        # Operation", from Sales to Operations - a genuinely ambiguous
+        # "Sales Operations"-style role either way, and a reasonable
+        # trade for correctly fixing 30 other postings.
+        "operation",
+    )),
     (InternshipCategory.STRATEGY, ("strategy", "strategies", "strategic")),
     (InternshipCategory.HUMAN_RESOURCES, (
         "human resources", "people team", "talent acquisition", "recruiting",

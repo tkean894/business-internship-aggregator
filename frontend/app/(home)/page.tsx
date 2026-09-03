@@ -17,6 +17,7 @@ import {
   locationFilterLabel,
   US_LOCATION_FILTER_VALUE,
 } from "@/lib/location";
+import { summarizeInternships } from "@/lib/resultSummary";
 import type { InternshipCategory, InternshipSort } from "@/lib/types";
 
 const PAGE_SIZE = 12;
@@ -105,19 +106,23 @@ export default async function HomePage({ searchParams }: HomePageProps) {
   // union, so picking "United States" actually excludes Canada and
   // vice versa.
   const naInternships = allMatchingInternships.filter((item) => displayFilter(item.location));
-  const totalNaInternships = naInternships.length;
+  // Drives both the hero stat and the "found" line below (Phase 10 Step
+  // 8) - computed once, from the complete filtered set, before
+  // pagination slices it into `visibleItems`, so both always agree with
+  // what the page actually shows and neither responds to page/sort
+  // changes (see summarizeInternships' own docstring).
+  const resultSummary = summarizeInternships(naInternships);
+  const totalNaInternships = resultSummary.count;
   const visibleItems = naInternships.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   // Platform-wide US/Canada-based set, independent of whatever search/
-  // filters are currently applied - used for the hero stat (this used
-  // to sum `active_internship_count` across every company unfiltered by
-  // location, which didn't match the actually-filtered results below
-  // and looked like a bug: "118 active internships" next to a page of
-  // 41) and for the location filter's dropdown options, so the dropdown
-  // always offers every location that could show a result, not just
-  // ones present in the currently-filtered subset. With no filters
-  // active, `naInternships` already IS the platform-wide set, so this
-  // only issues a second request when a filter is narrowing the results.
+  // filters are currently applied - used only for the location filter's
+  // dropdown options now (Phase 10 Step 8 moved the hero stat to
+  // `resultSummary` above), so the dropdown always offers every location
+  // that could show a result, not just ones present in the currently-
+  // filtered subset. With no filters active, `naInternships` already IS
+  // the platform-wide set, so this only issues a second request when a
+  // filter is narrowing the results.
   const platformWideNaInternships = hasActiveFilters
     ? (await getAllInternships({ active: true })).filter((item) => isUsOrCanadaLocation(item.location))
     : naInternships;
@@ -146,9 +151,10 @@ export default async function HomePage({ searchParams }: HomePageProps) {
           Search internships across finance, consulting, marketing, analytics, operations, product, and more.
         </p>
         <p className="mt-3 text-sm text-slate-500">
-          {platformWideNaInternships.length} active US &amp; Canada-based internship{platformWideNaInternships.length === 1 ? "" : "s"}{" "}
-          across {companiesRes.total} compan{companiesRes.total === 1 ? "y" : "ies"} and{" "}
-          {categoriesRes.categories.length} categories.
+          {resultSummary.count} active {foundLabel ? `${foundLabel} ` : ""}internship{resultSummary.count === 1 ? "" : "s"}{" "}
+          across {resultSummary.companyCount} compan{resultSummary.companyCount === 1 ? "y" : "ies"} and{" "}
+          {resultSummary.categoryCount} categor{resultSummary.categoryCount === 1 ? "y" : "ies"}
+          {hasActiveFilters ? " matching your filters" : ""}.
         </p>
       </header>
 

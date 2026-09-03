@@ -143,3 +143,29 @@ def test_bare_hr_keyword_has_a_real_word_boundary_not_a_substring_match():
     # embedded inside a longer, unrelated word.
     result = classify_internship("Chromatography Intern")
     assert result != InternshipCategory.HUMAN_RESOURCES
+
+
+def test_assurance_maps_to_accounting():
+    # Phase 10 Step 8: real, recurring PwC postings (Big 4 industry term
+    # for audit/attestation services) - previously fell to OTHER.
+    assert classify_internship("Intern - Assurance") == InternshipCategory.ACCOUNTING
+    assert classify_internship("Assurance Standards Off-Cycle Internship (Feb - Jun 2027)") == InternshipCategory.ACCOUNTING
+
+
+def test_assurance_keyword_does_not_override_an_equally_specific_finance_match():
+    # Regression guard: "financial" and "assurance" are the same length
+    # (9 chars) - a title matching both must keep resolving to Finance
+    # (found first in CATEGORY_KEYWORDS order) rather than flip to
+    # Accounting just because "assurance" appears later in the string.
+    result = classify_internship("Financial Services Assurance - Off-Cycle Internship (Jan - Jun 27)")
+    assert result == InternshipCategory.FINANCE
+
+
+def test_singular_operation_maps_to_operations():
+    # Phase 10 Step 8: 30 real, recurring Target postings ("Operation
+    # Manager Intern" at various Distribution Centers) use the singular
+    # "Operation" - the existing "operations"/"ops" keywords require the
+    # plural or abbreviated form and missed these entirely.
+    assert classify_internship("Operation Manager Intern (Starting Summer 2027) Food Distribution Center - Denton, TX") == InternshipCategory.OPERATIONS
+    # The plural form must keep working too.
+    assert classify_internship("Operations Manager Intern (Starting Summer 2027) Flow Distribution Center, Hampton, GA") == InternshipCategory.OPERATIONS

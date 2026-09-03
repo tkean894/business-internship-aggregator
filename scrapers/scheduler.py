@@ -41,6 +41,7 @@ from scrapers.companies.appliedmaterials import AppliedMaterialsScraper
 from scrapers.companies.assurant import AssurantScraper
 from scrapers.companies.barclays import BarclaysScraper
 from scrapers.companies.blackrock import BlackRockScraper
+from scrapers.companies.blackstone import BlackstoneScraper
 from scrapers.companies.boeing import BoeingScraper
 from scrapers.companies.boozallen import BoozAllenScraper
 from scrapers.companies.braze import BrazeScraper
@@ -48,10 +49,12 @@ from scrapers.companies.capitalone import CapitalOneScraper
 from scrapers.companies.caterpillar import CaterpillarScraper
 from scrapers.companies.chevron import ChevronScraper
 from scrapers.companies.cibc import CIBCScraper
+from scrapers.companies.cigna import CignaScraper
 from scrapers.companies.citigroup import CitigroupScraper
 from scrapers.companies.cloudflare import CloudflareScraper
 from scrapers.companies.cocacola import CocaColaScraper
 from scrapers.companies.cox import CoxEnterprisesScraper
+from scrapers.companies.deutschebank import DeutscheBankScraper
 from scrapers.companies.disney import DisneyScraper
 from scrapers.companies.fidelity import FidelityScraper
 from scrapers.companies.geaerospace import GEAerospaceScraper
@@ -73,7 +76,9 @@ from scrapers.companies.medtronic import MedtronicScraper
 from scrapers.companies.merck import MerckScraper
 from scrapers.companies.mksinstruments import MKSInstrumentsScraper
 from scrapers.companies.mondelez import MondelezScraper
+from scrapers.companies.northerntrust import NorthernTrustScraper
 from scrapers.companies.nyfed import NewYorkFedScraper
+from scrapers.companies.pfizer import PfizerScraper
 from scrapers.companies.pipersandler import PiperSandlerScraper
 from scrapers.companies.pnc import PNCScraper
 from scrapers.companies.polaris import PolarisScraper
@@ -180,6 +185,12 @@ SCRAPERS: list[type[BaseScraper]] = [
     KraftHeinzScraper,
     MerckScraper,
     TravelersScraper,
+    # Workday (Phase 10 Step 8 - high-value company batch)
+    DeutscheBankScraper,
+    CignaScraper,
+    NorthernTrustScraper,
+    BlackstoneScraper,
+    PfizerScraper,
     # Lever
     HCVTScraper,
 ]
