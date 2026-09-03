@@ -24,7 +24,9 @@ bookkeeping that could drift out of sync.
 from __future__ import annotations
 
 import logging
+import os
 from datetime import datetime, timedelta, timezone
+from html import escape as h
 
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
@@ -51,6 +53,16 @@ FREQUENCY_INTERVALS = {
     NotificationFrequency.DAILY: timedelta(days=1),
     NotificationFrequency.WEEKLY: timedelta(days=7),
 }
+
+# Base URL of the frontend, used to link each internship in a digest
+# email back to its detail page on the site itself (rather than
+# straight to the employer's application_url) - set in Render for
+# production; defaults to the local Next.js dev server otherwise.
+FRONTEND_BASE_URL = os.environ.get("FRONTEND_BASE_URL", "http://localhost:3000").rstrip("/")
+
+
+def _internship_url(internship: Internship) -> str:
+    return f"{FRONTEND_BASE_URL}/internships/{internship.id}"
 
 
 def generate_new_match_events(db: Session) -> int:
@@ -150,26 +162,55 @@ def _subject_for(events: list[NotificationEvent]) -> str:
     return "Business Internship Aggregator: " + " and ".join(parts)
 
 
+_FONT_STACK = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif"
+
+
+def _render_item(event: NotificationEvent, *, closed: bool) -> str:
+    internship = event.internship
+    meta = f"{h(internship.company.name)} · {h(internship.location or 'Location not specified')}"
+    if closed:
+        meta += " — no longer accepting applications"
+    else:
+        meta += f" · {h(internship.category)}"
+    return f"""
+    <div style="padding: 14px 0; border-bottom: 1px solid #e2e8f0;">
+      <a href="{h(_internship_url(internship))}" style="font-size: 15px; font-weight: 600; color: #0f172a; text-decoration: none;">{h(internship.title)}</a>
+      <p style="margin: 4px 0 0; font-size: 13px; color: #64748b;">{meta}</p>
+    </div>"""
+
+
+def _render_section(title: str, events: list[NotificationEvent], *, closed: bool) -> str:
+    items = "".join(_render_item(e, closed=closed) for e in events)
+    return f"""
+    <h2 style="font-size: 16px; margin: 28px 0 4px; color: #0f172a;">{h(title)}</h2>
+    <div style="border-top: 1px solid #e2e8f0;">{items}</div>"""
+
+
 def _render_digest_html(events: list[NotificationEvent]) -> str:
+    """Clean minimal-list digest: a linked title per internship, with
+    company/location/category underneath and a thin divider between
+    items (Phase 10 Step 8/9) - deliberately links each internship's
+    site detail page (FRONTEND_BASE_URL, above) rather than its raw
+    application_url, so a recipient can read the full posting, Save it,
+    or Apply from the same page they'd use browsing the site directly.
+    """
     new_matches = [e for e in events if e.event_type == NotificationEventType.NEW_MATCH]
     inactive = [e for e in events if e.event_type == NotificationEventType.SAVED_INTERNSHIP_INACTIVE]
 
     sections = []
     if new_matches:
-        items = "".join(
-            f"<li><strong>{e.internship.title}</strong> at {e.internship.company.name}"
-            f" ({e.internship.location or 'location not specified'})</li>"
-            for e in new_matches
-        )
-        sections.append(f"<h2>New internships matching your preferences</h2><ul>{items}</ul>")
+        sections.append(_render_section("New internships matching your preferences", new_matches, closed=False))
     if inactive:
-        items = "".join(
-            f"<li><strong>{e.internship.title}</strong> at {e.internship.company.name} is no longer active</li>"
-            for e in inactive
-        )
-        sections.append(f"<h2>Saved internships that closed</h2><ul>{items}</ul>")
+        sections.append(_render_section("Saved internships that closed", inactive, closed=True))
 
-    return "<div>" + "".join(sections) + "</div>"
+    return f"""
+    <div style="font-family: {_FONT_STACK}; color: #1e293b; max-width: 560px; margin: 0 auto;">
+      <p style="font-size: 12px; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: #64748b; margin: 0;">Business Internship Aggregator</p>
+      {"".join(sections)}
+      <p style="margin-top: 32px; font-size: 12px; color: #94a3b8;">
+        <a href="{h(FRONTEND_BASE_URL)}/settings/notifications" style="color: #94a3b8;">Manage your notification preferences</a>
+      </p>
+    </div>"""
 
 
 def send_pending_notifications(db: Session) -> dict[str, int]:

@@ -16,6 +16,8 @@ from backend.models import (
 )
 from backend.services.email import EmailSendError
 from backend.services.notifications import (
+    FRONTEND_BASE_URL,
+    _render_digest_html,
     generate_new_match_events,
     generate_saved_inactive_events,
     send_pending_notifications,
@@ -247,6 +249,50 @@ def test_daily_frequency_user_not_yet_due_is_skipped(db_session):
 
     assert not mock_send.called
     assert result == {"sent": 0, "failed": 0}
+
+
+def test_digest_html_links_each_internship_to_its_detail_page(db_session):
+    user = make_test_user(db_session, "notif-n")
+    pref = NotificationPreference(user_id=user.id, email_enabled=True, frequency=NotificationFrequency.IMMEDIATE, categories=["Finance"], locations=[TEST_LOCATION], created_at=OLD)
+    db_session.add(pref)
+    db_session.commit()
+    internship = _make_internship(db_session, slug="notif-n-1", category=InternshipCategory.FINANCE, first_seen_at=RECENT)
+    generate_new_match_events(db_session)
+    event = db_session.query(NotificationEvent).filter_by(user_id=user.id, internship_id=internship.id).one()
+
+    html = _render_digest_html([event])
+
+    assert f'href="{FRONTEND_BASE_URL}/internships/{internship.id}"' in html
+    assert internship.title in html
+
+
+def test_digest_html_escapes_special_characters_in_company_name(db_session):
+    # A real, recurring case: many companies in this dataset have "&" in
+    # their name (Procter & Gamble, Johnson & Johnson) - an unescaped
+    # ampersand would produce invalid/broken HTML in the email.
+    user = make_test_user(db_session, "notif-o")
+    pref = NotificationPreference(user_id=user.id, email_enabled=True, frequency=NotificationFrequency.IMMEDIATE, categories=["Finance"], locations=[TEST_LOCATION], created_at=OLD)
+    db_session.add(pref)
+    db_session.commit()
+    company = Company(name="Procter & Gamble", slug="test-notif-o-co", career_url="https://example.test", industry="Consumer Goods")
+    db_session.add(company)
+    db_session.flush()
+    internship = Internship(
+        company_id=company.id, title="Finance Intern <VIP>", category=InternshipCategory.FINANCE,
+        location=TEST_LOCATION, application_url="https://example.test/notif-o-1", source_url="https://example.test/notif-o-1",
+        posted_date=date.today(), is_active=True, first_seen_at=RECENT, last_seen_at=RECENT, dedupe_key="test-dedupe-notif-o-1",
+    )
+    db_session.add(internship)
+    db_session.commit()
+    generate_new_match_events(db_session)
+    event = db_session.query(NotificationEvent).filter_by(user_id=user.id, internship_id=internship.id).one()
+
+    html = _render_digest_html([event])
+
+    assert "Procter &amp; Gamble" in html
+    assert "Finance Intern &lt;VIP&gt;" in html
+    assert "Procter & Gamble" not in html  # the raw, unescaped form must not appear
+    assert "<VIP>" not in html
 
 
 def test_daily_frequency_user_past_due_is_sent(db_session):

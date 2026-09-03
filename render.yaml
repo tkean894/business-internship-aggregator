@@ -25,3 +25,7 @@ services:
         sync: false
       - key: NOTIFICATIONS_FROM_EMAIL
         sync: false
+      # Public URL, not a secret - links internships in notification
+      # emails back to their detail page on the site.
+      - key: FRONTEND_BASE_URL
+        value: https://business-internship-aggregator.vercel.app
