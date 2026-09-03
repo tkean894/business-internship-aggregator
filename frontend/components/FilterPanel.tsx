@@ -16,6 +16,9 @@ interface FilterPanelProps {
   selectedIndustry?: string;
 }
 
+const SELECT_CLASS =
+  "rounded-md border border-border-strong bg-surface px-3 py-2 text-sm text-foreground focus:outline-none focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background";
+
 export default function FilterPanel({
   categories,
   companies,
@@ -68,7 +71,7 @@ export default function FilterPanel({
           id="filter-category"
           value={selectedCategory ?? ""}
           onChange={(e) => updateParam("category", e.target.value)}
-          className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-slate-500 focus:outline-none focus:ring-2 focus:ring-slate-200"
+          className={SELECT_CLASS}
         >
           <option value="">All categories</option>
           {categories.map((category) => (
@@ -88,7 +91,7 @@ export default function FilterPanel({
             id="filter-industry"
             value={selectedIndustry ?? ""}
             onChange={(e) => updateParam("industry", e.target.value)}
-            className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-slate-500 focus:outline-none focus:ring-2 focus:ring-slate-200"
+            className={SELECT_CLASS}
           >
             <option value="">All industries</option>
             {industries.map((industry) => (
@@ -108,7 +111,7 @@ export default function FilterPanel({
           id="filter-company"
           value={selectedCompany ?? ""}
           onChange={(e) => updateParam("company", e.target.value)}
-          className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-slate-500 focus:outline-none focus:ring-2 focus:ring-slate-200"
+          className={SELECT_CLASS}
         >
           <option value="">All companies</option>
           {companies.map((company) => (
@@ -128,7 +131,7 @@ export default function FilterPanel({
             id="filter-location"
             value={selectedLocation ?? ""}
             onChange={(e) => updateParam("location", e.target.value)}
-            className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-slate-500 focus:outline-none focus:ring-2 focus:ring-slate-200"
+            className={SELECT_CLASS}
           >
             {/* The default, preselected option - no `location` param in
                 the URL at all. Labeled for what it actually does (US &
@@ -156,7 +159,7 @@ export default function FilterPanel({
         <button
           type="button"
           onClick={clearFilters}
-          className="text-sm font-medium text-slate-500 underline-offset-2 hover:text-slate-900 hover:underline"
+          className="rounded-sm text-sm font-medium text-muted-foreground underline-offset-2 hover:text-foreground hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background"
         >
           Clear filters
         </button>

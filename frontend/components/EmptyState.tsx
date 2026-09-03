@@ -12,12 +12,12 @@ export default function EmptyState({ context }: EmptyStateProps) {
     : "No internships match your search.";
 
   return (
-    <div className="rounded-lg border border-dashed border-slate-300 px-6 py-16 text-center">
-      <p className="text-base font-medium text-slate-900">{message}</p>
-      <p className="mt-1 text-sm text-slate-500">Try a different search term or clear your filters.</p>
+    <div className="rounded-lg border border-dashed border-border-strong px-6 py-16 text-center">
+      <p className="text-base font-medium text-foreground">{message}</p>
+      <p className="mt-1 text-sm text-muted-foreground">Try a different search term or clear your filters.</p>
       <Link
         href="/"
-        className="mt-4 inline-block rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700"
+        className="mt-4 inline-block rounded-md bg-accent-solid px-4 py-2 text-sm font-medium text-accent-foreground hover:bg-accent-solid-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background"
       >
         Clear filters
       </Link>

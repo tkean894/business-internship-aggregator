@@ -7,6 +7,9 @@ interface PaginationProps {
   currentParams: Record<string, string | string[] | undefined>;
 }
 
+const FOCUS_RING =
+  "focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background";
+
 function hrefForPage(currentParams: Record<string, string | string[] | undefined>, page: number): string {
   const params = new URLSearchParams();
   for (const [key, value] of Object.entries(currentParams)) {
@@ -43,7 +46,7 @@ export default function Pagination({ total, page, pageSize, currentParams }: Pag
         aria-disabled={page === 1}
         tabIndex={page === 1 ? -1 : undefined}
         className={`rounded-md px-3 py-2 text-sm font-medium ${
-          page === 1 ? "pointer-events-none text-slate-300" : "text-slate-700 hover:bg-slate-100"
+          page === 1 ? "pointer-events-none text-muted-foreground" : `text-foreground hover:bg-muted ${FOCUS_RING}`
         }`}
       >
         Previous
@@ -51,7 +54,7 @@ export default function Pagination({ total, page, pageSize, currentParams }: Pag
 
       {pageWindow.map((entry, idx) =>
         entry === "gap" ? (
-          <span key={`gap-${idx}`} className="px-2 text-slate-400" aria-hidden="true">
+          <span key={`gap-${idx}`} className="px-2 text-muted-foreground" aria-hidden="true">
             …
           </span>
         ) : (
@@ -60,8 +63,8 @@ export default function Pagination({ total, page, pageSize, currentParams }: Pag
             href={hrefForPage(currentParams, entry)}
             aria-current={entry === page ? "page" : undefined}
             className={`rounded-md px-3 py-2 text-sm font-medium ${
-              entry === page ? "bg-slate-900 text-white" : "text-slate-700 hover:bg-slate-100"
-            }`}
+              entry === page ? "bg-accent-solid text-accent-foreground" : "text-foreground hover:bg-muted"
+            } ${FOCUS_RING}`}
           >
             {entry}
           </Link>
@@ -73,7 +76,7 @@ export default function Pagination({ total, page, pageSize, currentParams }: Pag
         aria-disabled={page === totalPages}
         tabIndex={page === totalPages ? -1 : undefined}
         className={`rounded-md px-3 py-2 text-sm font-medium ${
-          page === totalPages ? "pointer-events-none text-slate-300" : "text-slate-700 hover:bg-slate-100"
+          page === totalPages ? "pointer-events-none text-muted-foreground" : `text-foreground hover:bg-muted ${FOCUS_RING}`
         }`}
       >
         Next

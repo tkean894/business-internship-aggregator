@@ -31,7 +31,7 @@ export default function SortSelect({ value }: { value: string }) {
         id="sort-select"
         value={value}
         onChange={(e) => handleChange(e.target.value)}
-        className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-slate-500 focus:outline-none focus:ring-2 focus:ring-slate-200"
+        className="rounded-md border border-border-strong bg-surface px-3 py-2 text-sm text-foreground focus:outline-none focus-visible:border-accent focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background"
       >
         {SORT_OPTIONS.map((option) => (
           <option key={option.value} value={option.value}>

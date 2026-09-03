@@ -13,6 +13,9 @@ const FREQUENCY_OPTIONS: { value: NotificationFrequency; label: string }[] = [
   { value: "weekly", label: "Weekly digest" },
 ];
 
+const FOCUS_RING =
+  "focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background";
+
 interface NotificationPreferencesFormProps {
   initialPreferences: NotificationPreferenceOut;
   categories: string[];
@@ -68,25 +71,25 @@ export default function NotificationPreferencesForm({
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-6">
-      <label className="flex items-center gap-2 text-sm font-medium text-slate-900">
+      <label className="flex items-center gap-2 text-sm font-medium text-foreground">
         <input
           type="checkbox"
           checked={emailEnabled}
           onChange={(e) => setEmailEnabled(e.target.checked)}
-          className="h-4 w-4 rounded border-slate-300"
+          className={`h-4 w-4 rounded border-border-strong text-accent-solid ${FOCUS_RING}`}
         />
         Email notifications enabled
       </label>
 
       <div>
-        <label htmlFor="frequency" className="block text-sm font-medium text-slate-900">
+        <label htmlFor="frequency" className="block text-sm font-medium text-foreground">
           Frequency
         </label>
         <select
           id="frequency"
           value={frequency}
           onChange={(e) => setFrequency(e.target.value as NotificationFrequency)}
-          className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-slate-500 focus:outline-none focus:ring-2 focus:ring-slate-200 sm:w-auto"
+          className={`mt-1 w-full rounded-md border border-border-strong bg-surface px-3 py-2 text-sm text-foreground sm:w-auto ${FOCUS_RING} focus-visible:border-accent`}
         >
           {FREQUENCY_OPTIONS.map((opt) => (
             <option key={opt.value} value={opt.value}>
@@ -97,20 +100,20 @@ export default function NotificationPreferencesForm({
       </div>
 
       <fieldset>
-        <legend className="text-sm font-medium text-slate-900">Categories (leave all unchecked for any category)</legend>
+        <legend className="text-sm font-medium text-foreground">Categories (leave all unchecked for any category)</legend>
         <div className="mt-2 flex flex-wrap gap-2">
           {categories.map((category) => (
             <label
               key={category}
-              className={`cursor-pointer rounded-full border px-3 py-1 text-xs font-medium transition ${
+              className={`cursor-pointer rounded-full border px-3 py-1 text-xs font-medium transition peer-focus-visible:ring-2 peer-focus-visible:ring-accent peer-focus-visible:ring-offset-2 peer-focus-visible:ring-offset-background ${
                 selectedCategories.includes(category)
-                  ? "border-slate-900 bg-slate-900 text-white"
-                  : "border-slate-300 bg-white text-slate-700 hover:border-slate-400"
+                  ? "border-accent-solid bg-accent-solid text-accent-foreground"
+                  : "border-border-strong bg-surface text-foreground hover:border-accent"
               }`}
             >
               <input
                 type="checkbox"
-                className="sr-only"
+                className="peer sr-only"
                 checked={selectedCategories.includes(category)}
                 onChange={() => toggle(selectedCategories, category, setSelectedCategories)}
               />
@@ -122,20 +125,20 @@ export default function NotificationPreferencesForm({
 
       {industries.length > 0 && (
         <fieldset>
-          <legend className="text-sm font-medium text-slate-900">Industries (leave all unchecked for any industry)</legend>
+          <legend className="text-sm font-medium text-foreground">Industries (leave all unchecked for any industry)</legend>
           <div className="mt-2 flex flex-wrap gap-2">
             {industries.map((industry) => (
               <label
                 key={industry}
-                className={`cursor-pointer rounded-full border px-3 py-1 text-xs font-medium transition ${
+                className={`cursor-pointer rounded-full border px-3 py-1 text-xs font-medium transition peer-focus-visible:ring-2 peer-focus-visible:ring-accent peer-focus-visible:ring-offset-2 peer-focus-visible:ring-offset-background ${
                   selectedIndustries.includes(industry)
-                    ? "border-slate-900 bg-slate-900 text-white"
-                    : "border-slate-300 bg-white text-slate-700 hover:border-slate-400"
+                    ? "border-accent-solid bg-accent-solid text-accent-foreground"
+                    : "border-border-strong bg-surface text-foreground hover:border-accent"
                 }`}
               >
                 <input
                   type="checkbox"
-                  className="sr-only"
+                  className="peer sr-only"
                   checked={selectedIndustries.includes(industry)}
                   onChange={() => toggle(selectedIndustries, industry, setSelectedIndustries)}
                 />
@@ -147,7 +150,7 @@ export default function NotificationPreferencesForm({
       )}
 
       <div>
-        <label htmlFor="locations" className="block text-sm font-medium text-slate-900">
+        <label htmlFor="locations" className="block text-sm font-medium text-foreground">
           Locations (optional, comma-separated - leave blank for any location)
         </label>
         <input
@@ -156,7 +159,7 @@ export default function NotificationPreferencesForm({
           value={locationsText}
           onChange={(e) => setLocationsText(e.target.value)}
           placeholder="e.g. Austin, TX, Washington, DC"
-          className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:border-slate-500 focus:outline-none focus:ring-2 focus:ring-slate-200"
+          className={`mt-1 w-full rounded-md border border-border-strong px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground ${FOCUS_RING} focus-visible:border-accent`}
         />
       </div>
 
@@ -164,12 +167,12 @@ export default function NotificationPreferencesForm({
         <button
           type="submit"
           disabled={status === "saving"}
-          className="rounded-md bg-slate-900 px-5 py-2.5 text-sm font-semibold text-white hover:bg-slate-700 disabled:opacity-60"
+          className={`rounded-md bg-accent-solid px-5 py-2.5 text-sm font-semibold text-accent-foreground hover:bg-accent-solid-hover disabled:opacity-60 ${FOCUS_RING}`}
         >
           {status === "saving" ? "Saving..." : "Save preferences"}
         </button>
-        {status === "saved" && <span className="text-sm text-emerald-600">Saved.</span>}
-        {status === "error" && <span className="text-sm text-red-600">Something went wrong. Try again.</span>}
+        {status === "saved" && <span className="text-sm text-success">Saved.</span>}
+        {status === "error" && <span className="text-sm text-danger">Something went wrong. Try again.</span>}
       </div>
     </form>
   );

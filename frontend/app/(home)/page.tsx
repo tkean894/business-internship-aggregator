@@ -144,13 +144,13 @@ export default async function HomePage({ searchParams }: HomePageProps) {
   return (
     <main className="mx-auto max-w-5xl px-4 py-8 sm:py-12">
       <header className="mb-8">
-        <h1 className="text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">
+        <h1 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
           Business internships, all in one place.
         </h1>
-        <p className="mt-2 text-slate-600">
+        <p className="mt-2 text-muted-foreground">
           Search internships across finance, consulting, marketing, analytics, operations, product, and more.
         </p>
-        <p className="mt-3 text-sm text-slate-500">
+        <p className="mt-3 text-sm text-muted-foreground">
           {resultSummary.count} active {foundLabel ? `${foundLabel} ` : ""}internship{resultSummary.count === 1 ? "" : "s"}{" "}
           across {resultSummary.companyCount} compan{resultSummary.companyCount === 1 ? "y" : "ies"} and{" "}
           {resultSummary.categoryCount} categor{resultSummary.categoryCount === 1 ? "y" : "ies"}
@@ -163,10 +163,10 @@ export default async function HomePage({ searchParams }: HomePageProps) {
           <Link
             key={cat}
             href={`/?category=${encodeURIComponent(cat)}`}
-            className={`rounded-full border px-3 py-1 text-xs font-medium transition ${
+            className={`rounded-full border px-3 py-1 text-xs font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background ${
               category === cat
-                ? "border-slate-900 bg-slate-900 text-white"
-                : "border-slate-300 bg-white text-slate-700 hover:border-slate-400"
+                ? "border-accent-solid bg-accent-solid text-accent-foreground"
+                : "border-border-strong bg-surface text-foreground hover:border-accent"
             }`}
           >
             {cat}
@@ -191,7 +191,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
         </div>
       </div>
 
-      <p className="mb-4 text-sm text-slate-500">
+      <p className="mb-4 text-sm text-muted-foreground">
         {totalNaInternships} {foundLabel ? `${foundLabel} ` : ""}internship{totalNaInternships === 1 ? "" : "s"} found
       </p>
 

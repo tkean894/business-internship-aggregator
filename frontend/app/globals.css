@@ -1,3 +1,48 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* Design tokens (Phase 10, Step 9 - warm/approachable palette + dark
+   mode). Light values on :root, dark values under .dark (next-themes'
+   `attribute="class"` convention) - mapped into Tailwind's color scale
+   in tailwind.config.ts so every component uses a semantic name
+   (bg-background, text-foreground, ...) instead of a literal shade. */
+:root {
+  color-scheme: light;
+  --color-background: #fafaf9; /* stone-50 */
+  --color-surface: #ffffff;
+  --color-foreground: #1c1917; /* stone-900 */
+  --color-muted: #f5f5f4; /* stone-100 */
+  --color-muted-foreground: #57534e; /* stone-600 - AA-passing replacement for slate-400/500 */
+  --color-border: #e7e5e4; /* stone-200 */
+  --color-border-strong: #d6d3d1; /* stone-300 */
+  --color-accent: #0d9488; /* teal-600 */
+  --color-accent-foreground: #ffffff;
+  --color-accent-solid: #0f766e; /* teal-700 - AA-safe as a solid button fill under white text */
+  --color-accent-solid-hover: #115e59; /* teal-800 */
+  --color-success: #047857; /* emerald-700 */
+  --color-success-bg: #d1fae5; /* emerald-100 */
+  --color-warning: #b45309; /* amber-700 */
+  --color-warning-bg: #fef3c7; /* amber-100 */
+  --color-danger: #dc2626; /* red-600 */
+}
+
+.dark {
+  color-scheme: dark;
+  --color-background: #0c0a09; /* stone-950 */
+  --color-surface: #1c1917; /* stone-900 */
+  --color-foreground: #f5f5f4; /* stone-100 */
+  --color-muted: #292524; /* stone-800 */
+  --color-muted-foreground: #a8a29e; /* stone-400 */
+  --color-border: #44403c; /* stone-700 */
+  --color-border-strong: #57534e; /* stone-600 */
+  --color-accent: #14b8a6; /* teal-500 - one step brighter so it still pops on a dark ground */
+  --color-accent-foreground: #ffffff;
+  --color-accent-solid: #0f766e;
+  --color-accent-solid-hover: #115e59;
+  --color-success: #047857;
+  --color-success-bg: #d1fae5;
+  --color-warning: #b45309;
+  --color-warning-bg: #fef3c7;
+  --color-danger: #f87171; /* red-400 */
+}

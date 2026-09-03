@@ -5,6 +5,7 @@ import { useState } from "react";
 import { isNewlyDiscovered } from "@/lib/format";
 import type { InternshipOut } from "@/lib/types";
 
+import Badge from "./Badge";
 import InternshipCard from "./InternshipCard";
 
 /**
@@ -20,28 +21,24 @@ export default function CompanyStack({ companyName, items }: { companyName: stri
   const hasNewPosting = items.some((internship) => isNewlyDiscovered(internship.first_seen_at));
 
   return (
-    <div className="rounded-lg border border-slate-200 bg-white">
+    <div className="rounded-lg border border-border bg-surface">
       <button
         type="button"
         onClick={() => setExpanded((prev) => !prev)}
         aria-expanded={expanded}
-        className="flex w-full items-center justify-between gap-4 p-5 text-left transition hover:bg-slate-50"
+        className="flex w-full items-center justify-between gap-4 p-5 text-left transition hover:bg-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background"
       >
         <div>
           <div className="flex flex-wrap items-center gap-2">
-            <p className="text-base font-semibold text-slate-900">{companyName}</p>
-            {hasNewPosting && (
-              <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-700">
-                New
-              </span>
-            )}
+            <p className="text-base font-semibold text-foreground">{companyName}</p>
+            {hasNewPosting && <Badge variant="new" />}
           </div>
-          <p className="mt-0.5 text-sm text-slate-600">{items.length} open internships</p>
+          <p className="mt-0.5 text-sm text-muted-foreground">{items.length} open internships</p>
         </div>
-        <span className="shrink-0 text-sm font-medium text-slate-500">{expanded ? "Hide" : "Show"} all</span>
+        <span className="shrink-0 text-sm font-medium text-muted-foreground">{expanded ? "Hide" : "Show"} all</span>
       </button>
       {expanded && (
-        <ul className="flex flex-col gap-3 border-t border-slate-200 p-3">
+        <ul className="flex flex-col gap-3 border-t border-border p-3">
           {items.map((internship) => (
             <li key={internship.id}>
               <InternshipCard internship={internship} />

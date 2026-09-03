@@ -54,10 +54,10 @@ export default function SaveButton({ internshipId, initialSaved, size = "sm" }: 
       onClick={handleClick}
       disabled={isPending}
       aria-pressed={saved}
-      className={`relative z-10 shrink-0 rounded-md border font-medium transition disabled:opacity-60 ${sizeClasses} ${
+      className={`relative z-10 shrink-0 rounded-md border font-medium transition disabled:opacity-60 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background ${sizeClasses} ${
         saved
-          ? "border-slate-300 bg-slate-100 text-slate-700 hover:bg-slate-200"
-          : "border-slate-300 bg-white text-slate-600 hover:bg-slate-50"
+          ? "border-border-strong bg-muted text-foreground hover:bg-border"
+          : "border-border-strong bg-surface text-muted-foreground hover:bg-muted"
       }`}
     >
       {saved ? "Saved" : "Save"}

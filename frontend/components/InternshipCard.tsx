@@ -3,11 +3,12 @@ import Link from "next/link";
 import { freshnessLabel, isNewlyDiscovered } from "@/lib/format";
 import type { InternshipOut } from "@/lib/types";
 
+import Badge from "./Badge";
 import SaveButton from "./SaveButton";
 
 export default function InternshipCard({ internship }: { internship: InternshipOut }) {
   return (
-    <div className="relative rounded-lg border border-slate-200 bg-white p-5 transition hover:border-slate-300 hover:shadow-sm">
+    <div className="relative rounded-lg border border-border bg-surface p-5 transition hover:border-border-strong hover:shadow-sm">
       <div className="flex items-start justify-between gap-4">
         <div>
           <div className="flex flex-wrap items-center gap-2">
@@ -19,31 +20,23 @@ export default function InternshipCard({ internship }: { internship: InternshipO
                 interactive element. */}
             <Link
               href={`/internships/${internship.id}`}
-              className="text-base font-semibold text-slate-900 after:absolute after:inset-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-slate-400"
+              className="text-base font-semibold text-foreground after:absolute after:inset-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-background"
             >
               {internship.title}
             </Link>
-            {isNewlyDiscovered(internship.first_seen_at) && (
-              <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-700">
-                New
-              </span>
-            )}
-            {!internship.is_active && (
-              <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-700">
-                No longer active
-              </span>
-            )}
+            {isNewlyDiscovered(internship.first_seen_at) && <Badge variant="new" />}
+            {!internship.is_active && <Badge variant="inactive" />}
           </div>
-          <p className="mt-0.5 text-sm text-slate-600">{internship.company.name}</p>
+          <p className="mt-0.5 text-sm text-muted-foreground">{internship.company.name}</p>
         </div>
         <div className="flex shrink-0 items-center gap-2">
-          <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700">
+          <span className="rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-foreground">
             {internship.category}
           </span>
           <SaveButton internshipId={internship.id} initialSaved={internship.is_saved} />
         </div>
       </div>
-      <dl className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-sm text-slate-500">
+      <dl className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
         {internship.location && (
           <div>
             <dt className="sr-only">Location</dt>
