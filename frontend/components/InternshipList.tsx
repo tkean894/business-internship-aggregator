@@ -1,4 +1,3 @@
-import { isPostedWithinOneDay } from "@/lib/format";
 import type { InternshipOut } from "@/lib/types";
 
 import CompanyStack from "./CompanyStack";
@@ -10,13 +9,13 @@ type RenderItem =
 
 /**
  * Groups postings from the same company into a single collapsed stack
- * when 2+ of them are all visible in `internships` (the current page's
- * filtered/sorted results), so a company with many open roles doesn't
- * dominate the list. Any listing first seen within the last day breaks
- * out as its own card instead of disappearing into a stack (see
- * lib/format.ts `isPostedWithinOneDay`), so a brand-new posting is never
- * buried. A company with only one non-fresh posting isn't wrapped in a
- * stack at all - there's nothing to collapse.
+ * whenever 2+ of them are all visible in `internships` (the current
+ * page's filtered/sorted results), so a company with many open roles
+ * doesn't dominate the list. New postings stay inside the group rather
+ * than breaking out separately - CompanyStack surfaces a "New" badge on
+ * the collapsed header instead, so the group itself signals freshness.
+ * A company with only one visible posting isn't wrapped in a stack at
+ * all - there's nothing to collapse.
  *
  * Order is otherwise preserved: each render item takes the position of
  * its first occurrence in `internships`, so the current sort order
@@ -24,25 +23,19 @@ type RenderItem =
  * unaffected.
  */
 function buildRenderItems(internships: InternshipOut[]): RenderItem[] {
-  const stackableByCompany = new Map<number, InternshipOut[]>();
+  const byCompany = new Map<number, InternshipOut[]>();
   for (const internship of internships) {
-    if (isPostedWithinOneDay(internship.first_seen_at)) continue;
-    const list = stackableByCompany.get(internship.company.id) ?? [];
+    const list = byCompany.get(internship.company.id) ?? [];
     list.push(internship);
-    stackableByCompany.set(internship.company.id, list);
+    byCompany.set(internship.company.id, list);
   }
 
   const renderItems: RenderItem[] = [];
   const stackedCompanyIds = new Set<number>();
 
   for (const internship of internships) {
-    if (isPostedWithinOneDay(internship.first_seen_at)) {
-      renderItems.push({ kind: "single", key: `internship-${internship.id}`, internship });
-      continue;
-    }
-
-    const stackable = stackableByCompany.get(internship.company.id)!;
-    if (stackable.length < 2) {
+    const companyItems = byCompany.get(internship.company.id)!;
+    if (companyItems.length < 2) {
       renderItems.push({ kind: "single", key: `internship-${internship.id}`, internship });
       continue;
     }
@@ -54,7 +47,7 @@ function buildRenderItems(internships: InternshipOut[]): RenderItem[] {
       kind: "stack",
       key: `stack-${internship.company.id}`,
       companyName: internship.company.name,
-      items: stackable,
+      items: companyItems,
     });
   }
 
