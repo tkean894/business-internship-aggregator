@@ -56,3 +56,17 @@ export function isNewlyDiscovered(first_seen_at: string): boolean {
   const days = daysSince(first_seen_at);
   return !Number.isNaN(days) && days <= NEW_THRESHOLD_DAYS;
 }
+
+const STACK_BREAKOUT_THRESHOLD_DAYS = 1;
+
+/**
+ * Whether a listing is fresh enough to break out of a same-company stack
+ * in the internship list (see InternshipList.tsx). Deliberately a
+ * stricter, separate threshold from `isNewlyDiscovered`'s 7-day "New"
+ * badge - breaking every "New" listing out of its stack would defeat the
+ * point of stacking for any company posting more than one role a week.
+ */
+export function isPostedWithinOneDay(first_seen_at: string): boolean {
+  const days = daysSince(first_seen_at);
+  return !Number.isNaN(days) && days <= STACK_BREAKOUT_THRESHOLD_DAYS;
+}
