@@ -51,7 +51,7 @@ class LeverScraper(BaseScraper):
     def parse_listing(self, raw: dict) -> NormalizedInternship | None:
         title = raw["text"].strip()
 
-        category = classify_internship(title)
+        category = classify_internship(title, industry=self.industry)
         if category is None:
             return None
 

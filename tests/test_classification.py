@@ -169,3 +169,109 @@ def test_singular_operation_maps_to_operations():
     assert classify_internship("Operation Manager Intern (Starting Summer 2027) Food Distribution Center - Denton, TX") == InternshipCategory.OPERATIONS
     # The plural form must keep working too.
     assert classify_internship("Operations Manager Intern (Starting Summer 2027) Flow Distribution Center, Hampton, GA") == InternshipCategory.OPERATIONS
+
+
+def test_legal_maps_to_legal_category():
+    # Phase 10 Step 9: real, recurring postings across 9 unrelated
+    # companies previously fell to OTHER (or, in one case, Operations).
+    assert classify_internship("Legal Intern") == InternshipCategory.LEGAL
+    assert classify_internship("Intern, Group Legal") == InternshipCategory.LEGAL
+    assert classify_internship("Law Internship (Stage)") == InternshipCategory.LEGAL
+    assert classify_internship("Internship Litigation Team - Non Performing Exposures Management (f/m/x)") == InternshipCategory.LEGAL
+
+
+def test_legal_keyword_does_not_collide_with_lawyer_or_flawed_substrings():
+    # "law" must word-boundary match, not substring-match inside an
+    # unrelated word.
+    result = classify_internship("Flawless Execution Intern")
+    assert result != InternshipCategory.LEGAL
+
+
+def test_auditor_maps_to_accounting():
+    # Phase 10 Step 9: real PwC "Junior Auditor (Intern)" postings - the
+    # existing "audit" keyword requires a trailing word boundary and
+    # doesn't match the "-or" noun form.
+    assert classify_internship("Junior Auditor (Intern) - 4 months") == InternshipCategory.ACCOUNTING
+
+
+def test_auditor_keyword_does_not_override_a_longer_operations_match():
+    # Regression guard: a real Disney posting already correctly resolves
+    # to Operations via the longer "operations" keyword (10 chars) and
+    # must keep doing so now that "auditor" (7 chars) also matches.
+    result = classify_internship("Quality Operations System Auditor Intern, Spring 2027")
+    assert result == InternshipCategory.OPERATIONS
+
+
+def test_hrbp_maps_to_human_resources():
+    assert classify_internship("HRBP Intern (Jan-Jun 2027)") == InternshipCategory.HUMAN_RESOURCES
+
+
+def test_purchasing_maps_to_supply_chain():
+    # Phase 10 Step 9: real P&G/GM postings use "Purchasing", the
+    # standard retail/manufacturing synonym for procurement.
+    assert classify_internship("Purchasing Intern") == InternshipCategory.SUPPLY_CHAIN
+    assert classify_internship("Purchasing Student Intern") == InternshipCategory.SUPPLY_CHAIN
+
+
+def test_business_intelligence_maps_to_business_analytics():
+    assert classify_internship("Business Intelligence & Data Analysis Internship") == InternshipCategory.BUSINESS_ANALYTICS
+
+
+def test_credit_maps_to_finance():
+    assert classify_internship("Credit Intern") == InternshipCategory.FINANCE
+
+
+def test_credit_keyword_does_not_override_more_specific_matches():
+    # Regression guard: real postings that already resolve correctly via
+    # a longer keyword must keep doing so.
+    assert classify_internship("Early Career Intern - Real Estate (Equity & Credit)") == InternshipCategory.REAL_ESTATE
+    assert classify_internship("Corporate & Institutional Banking Undergraduate Intern - Tax Credit") == InternshipCategory.FINANCE
+
+
+def test_store_leadership_maps_to_operations():
+    # Phase 10 Step 9: 80 real, recurring Target "Store Executive Intern
+    # (Store Leadership Intern)" postings, one per store location - by
+    # far the single largest fix in this phase.
+    assert classify_internship("Store Executive Intern (Store Leadership Intern) - Denver, CO (Starting Summer 2027)") == InternshipCategory.OPERATIONS
+    # A minority of the 80 use the plural "Stores Executive" - "store
+    # leadership" alone (present in all 80 via the parenthetical) covers
+    # this case too.
+    assert classify_internship("Stores Executive Internship (Store Leadership Intern) - Omaha, NE (Starting Summer 2027)") == InternshipCategory.OPERATIONS
+
+
+def test_technical_and_vocational_leakage_is_excluded():
+    # Phase 10 Step 9: a full-dataset audit of OTHER found skilled-trade
+    # and engineering-discipline postings that the existing exclusion
+    # list didn't catch, either because the title uses "Engineering" as
+    # its own noun (not immediately adjacent to "Intern") or because the
+    # trade itself (HVAC, electrician) had no keyword at all.
+    assert classify_internship("HVAC Technician Intern") is None
+    assert classify_internship("Electrician Technician Intern") is None
+    assert classify_internship("Military DoD SkillBridge Internship - Maintenance Technician") is None
+    assert classify_internship("Supplier Industrial Engineer (Internship)") is None
+    assert classify_internship("2027 Industrial Engineering Summer Intern - Chicago IL") is None
+    assert classify_internship("2027 Summer Intern - Manufacturing Engineering - Body Center") is None
+    assert classify_internship("Internship - CRO Manufacturing Engineer") is None
+    assert classify_internship("Manufacturing Intern - Process Engineering") is None
+
+
+def test_capital_markets_is_industry_scoped_to_real_estate():
+    # Phase 10 Step 9: "Capital Markets" means real-estate investment
+    # sales/financing at a real-estate services firm (JLL) but
+    # investment-banking capital markets at a bank - a full-dataset scan
+    # found both meanings recurring across unrelated companies, so the
+    # keyword is scoped to Company.industry rather than added globally.
+    assert classify_internship(
+        "Capital Markets Summer 2027 Internship - Miami, FL", industry="Real Estate"
+    ) == InternshipCategory.REAL_ESTATE
+    # Without the industry context (or with a different industry, e.g. a
+    # bank), the same title must NOT be swept into Real Estate.
+    assert classify_internship("Capital Markets Summer 2027 Internship - Miami, FL") == InternshipCategory.OTHER
+    assert classify_internship(
+        "Capital Markets Off Cycle Internship Programme 2027 Frankfurt", industry="Financial Services"
+    ) == InternshipCategory.OTHER
+    # A bank's own "capital markets" posting must never become Real
+    # Estate just because some other company shares the phrase.
+    assert classify_internship(
+        "Capital Markets Summer Internship Programme 2027 London", industry="Financial Services"
+    ) != InternshipCategory.REAL_ESTATE

@@ -29,6 +29,14 @@ class InternshipCategory(str, enum.Enum):
     HUMAN_RESOURCES = "Human Resources"
     SALES = "Sales"
     REAL_ESTATE = "Real Estate"
+    # Phase 10 Step 9: ~10 recurring active postings across 9 unrelated
+    # companies (Deutsche Bank, Kraft Heinz, AIA, P&G, PwC, Federal Reserve
+    # Bank of NY, Prudential, Mondelez, Cigna) spanning Financial Services,
+    # Insurance, Consulting, and Consumer Goods - comparable to or exceeding
+    # Real Estate's volume (14 postings) when that category was added in
+    # Phase 8. Previously all fell to Other or, in one case, were
+    # miscategorized into Operations.
+    LEGAL = "Legal"
     OTHER = "Other"
 
 

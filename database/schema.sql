@@ -23,6 +23,11 @@
 -- Adding a new category later requires an ALTER TYPE migration; this
 -- is an acceptable tradeoff given the list is small and stable.
 -- ---------------------------------------------------------------------
+-- Kept in sync with the Alembic migrations (the actual source of truth
+-- for what's in production) as of Phase 10 Step 9: Sales and Real Estate
+-- (Phase 7/8) and Legal (Phase 10 Step 9) were added via `ALTER TYPE
+-- internship_category ADD VALUE` migrations after this file was first
+-- written and hadn't been backfilled here until now.
 CREATE TYPE internship_category AS ENUM (
     'Product Management',
     'Business Analytics',
@@ -34,6 +39,9 @@ CREATE TYPE internship_category AS ENUM (
     'Supply Chain',
     'Strategy',
     'Human Resources',
+    'Sales',
+    'Real Estate',
+    'Legal',
     'Other'
 );
 

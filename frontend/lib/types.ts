@@ -13,6 +13,7 @@ export type InternshipCategory =
   | "Human Resources"
   | "Sales"
   | "Real Estate"
+  | "Legal"
   | "Other";
 
 export type InternshipSort =
