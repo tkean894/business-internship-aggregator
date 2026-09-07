@@ -9,9 +9,8 @@ python-dotenv
 PyJWT[crypto]  # verifies Clerk session JWTs against their JWKS - see backend/api/auth.py
 
 # Scraping
-playwright
 requests
-beautifulsoup4
+beautifulsoup4  # HTML description cleanup (scrapers/text_utils.py) - all 3 ATS integrations use JSON APIs, not browser automation
 
 # Testing
 pytest

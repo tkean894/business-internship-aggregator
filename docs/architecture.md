@@ -1,106 +1,113 @@
 # Architecture Overview
 
-This document describes the technical architecture for the MVP. As of Phase 6, the full stack is implemented, tested, and deployed to production (see "Production Architecture" below and `roadmap.md` for phase-by-phase build order).
+This document describes the technical architecture as actually built and deployed to production (73 companies, 14 categories, Phase 10 Step 9 as of last major revision — see `roadmap.md` for phase-by-phase build history). The sections below describe the current system; "Implementation Notes" further down is a chronological log of how and why each piece was built, kept for engineering-decision history rather than as the primary reference.
+
+**Note on scope:** the original MVP plan (written before any code existed) called for Playwright-driven browser scraping of each company's career site individually. That never shipped, on purpose: every ATS platform actually integrated (Workday, Greenhouse, Lever) turned out to expose a public, unauthenticated JSON API, which is simpler, faster, and far less fragile than browser automation against arbitrary HTML. Playwright remains listed as a possible future dependency only if a high-value employer is found on a JSON-API-less platform; none has been implemented against it, and it isn't in `requirements.txt`.
 
 ## High-Level Flow
 
-```text
-Company Career Websites
-        ↓
-     Playwright
-        ↓
- Company Scrapers
-        ↓
- Data Normalization
-        ↓
- Duplicate Detection
-        ↓
-    PostgreSQL
-        ↓
-     FastAPI
-        ↓
-     Next.js
-        ↓
-       User
+```mermaid
+flowchart TD
+    A[Company ATS<br/>Workday / Greenhouse / Lever JSON API] --> B[ATS-specific scraper]
+    B --> C[Normalization<br/>shared NormalizedInternship schema]
+    C --> D[Business-relevance filter<br/>intern-title check + technical exclusions]
+    D --> E[Classification<br/>14-category deterministic classifier]
+    E --> F[Deduplication<br/>DB-enforced unique dedupe_key]
+    F --> G[(PostgreSQL)]
+    G --> H[FastAPI]
+    H --> I[Next.js frontend]
 ```
 
 ## Component Responsibilities
 
 ### Frontend (Next.js + React + Tailwind CSS)
 
-Responsible for presenting internship data to the user and translating user interaction into API calls. Specifically:
-- Rendering a searchable, filterable list of internships.
-- Rendering an internship detail view.
-- Sending search/filter parameters to the FastAPI backend and rendering results.
-- Linking out to the original company application page for each listing.
-
-The frontend holds no business logic beyond presentation and query construction — all filtering/search logic lives in the backend/database layer.
+Presents internship data and translates user interaction into API calls: a searchable/filterable list, internship and company detail pages, category/company/location/industry filters, sorting, pagination, saved internships, and notification preferences (for signed-in users). The frontend holds no business logic beyond presentation and query construction — search, filtering, classification, and the "US & Canada" geographic display heuristic all live server-side; the one piece of client-computed state is the dynamic result-summary count (company/category counts for the *currently filtered* result set), computed from the same array the results list already renders from so it can never disagree with what's on screen.
 
 ### Backend (FastAPI)
 
-Responsible for exposing internship data to the frontend (and any future clients) over a REST API. Specifically:
-- Querying PostgreSQL for internship records.
-- Implementing search (keyword) and filter (category, company, location) query parameters.
-- Implementing pagination for list endpoints.
-- Validating request parameters and returning consistent JSON responses.
-
-The backend does not scrape data itself — it only reads from (and, internally, writes to) the database that scrapers populate.
+Exposes internship, company, and category data over a REST API: search (keyword), filters (category/company/location/industry), sorting, pagination, plus authenticated endpoints for saving internships and managing notification preferences. Verifies each authenticated request's session token independently against Clerk's JWKS rather than trusting the frontend's auth state. Does not scrape — it only reads from (and, for saves/preferences, writes to) the database that the scraper pipeline populates.
 
 ### Database (PostgreSQL)
 
-Responsible for durable storage of normalized internship data. Stores:
-- Internship postings (title, company, category/function, location, description, application URL, source, date first detected, date last seen, active/inactive status).
-- Company metadata (name, career page URL, associated scraper identifier).
-- Fields needed to support duplicate detection (e.g., a normalized/hashed representation of title+company+location, or the source URL as a natural key).
-
-PostgreSQL is the single source of truth. Both the scraping pipeline and the API read/write against it — there is no separate cache or search index in the MVP.
+Single source of truth — no separate cache or search index. Stores internship postings (title, description, category, location, application/source URLs, `first_seen_at`/`last_seen_at`, `is_active`, a unique `dedupe_key`), company metadata (name, career URL, industry, ATS-derived config), and the user-facing tables (users, saved internships, notification preferences/events) added in the accounts phase. Schema changes only ever happen through Alembic migrations — `database/schema.sql` is a human-readable reference copy, not something applied directly.
 
 ### Scrapers (`scrapers/companies/`)
 
-Each company gets its own scraper module responsible for:
-- Navigating that company's specific career site structure using Playwright.
-- Extracting raw posting data (title, location, description, link, etc.) relevant to business roles.
-- Handing raw extracted data off to the normalization step — scrapers should not normalize or deduplicate themselves.
-
-Company scrapers are intentionally isolated from one another so that one company's site changing/breaking doesn't affect others.
+Each of the 73 integrated companies is a small config class (tenant/board identifier, career URL, industry, and — for Workday — an optional facet ID to narrow the fetch) that subclasses one of three shared ATS scrapers. There is no per-company HTML parsing logic; the site-specific work was done once, per ATS platform, not once per company. See "Scraper Hierarchy" below.
 
 ### `base_scraper.py`
 
-Defines a shared scraper interface/base class that all company-specific scrapers inherit from, so scrapers are consistent and swappable. Conceptually, it should define:
-- A common lifecycle (e.g., `setup` → `fetch_listings` → `parse_listing` → `teardown`).
-- A standard return format that every scraper must produce, regardless of the source site's structure, so downstream normalization can treat all scrapers identically.
-- Shared error handling/logging so an individual scraper's failure is caught and reported instead of crashing the run.
+Defines the shared lifecycle every ATS scraper follows: fetch raw listings → parse each into a `NormalizedInternship` (or skip it, e.g. non-internship titles or excluded technical roles) → compute a dedupe key → insert or update → after a successful fetch, deactivate any of that company's postings not seen in this run. Per-listing parsing errors are caught and logged without aborting the company's run; per-company errors are caught by the scheduler without aborting other companies' runs.
 
-Company scrapers implement the site-specific parsing logic; `base_scraper.py` enforces the contract they must follow.
+### Scheduler (`scrapers/scheduler.py`)
 
-### Scheduler (`scheduler.py`)
+Runs all 73 company scrapers through a bounded thread pool (`MAX_PARALLEL_SCRAPERS = 8`), independently of each other, then reports per-company success/failure. This is the entry point both for local manual runs and for the scheduled GitHub Actions job — no external job queue or long-running process.
 
-Responsible for triggering scraping jobs on a recurring basis. Conceptually, it will:
-- Maintain (or read from config/DB) the list of company scrapers to run.
-- Invoke each company scraper in turn (or in parallel, within reasonable limits), independently of the others.
-- Hand successfully scraped/normalized data off to the duplicate detection and storage step.
-- Log per-scraper success/failure for observability.
+## Scraper Hierarchy
 
-In the MVP, the scheduler is invoked manually or via a GitHub Actions workflow on a schedule (see Automation phase in `roadmap.md`) — no long-running process or external job queue is required.
+```text
+BaseScraper (shared lifecycle, DB writes, dedupe, lifecycle reconciliation)
+├── WorkdayScraper   (65 companies)
+├── GreenhouseScraper (7 companies)
+└── LeverScraper      (1 company)
+        ↑
+   scrapers/companies/*.py — one small config class per company
+```
 
-## Data Flow: From Company Website to User
+This hierarchy is why adding company #74 is almost always a config change (tenant name, board token, a few identifying fields) rather than new code: the fetch/parse/normalize/dedupe logic for a given ATS was written once and is shared by every company on that platform. A new ATS platform (there have been exactly 3 in this project's history) is the only case that requires writing new scraper logic — and that's treated as a real architectural decision, not a routine addition (see "Failure Model" below and the ATS-research notes in "Implementation Notes").
 
-1. A scheduled (or manually triggered) run starts the scheduler.
-2. The scheduler invokes each company-specific scraper (built on `base_scraper.py`).
-3. Each scraper uses Playwright to load the company's career page and extract raw internship listings relevant to business roles.
-4. Raw listings are passed through a normalization step, converting them into a consistent internal schema (title, company, category, location, description, URL, dates).
-5. Normalized listings pass through duplicate detection, which checks them against existing records (e.g., by source URL or a normalized title+company+location signature) before insert/update.
-6. New or updated listings are written to PostgreSQL; existing unchanged listings are left as-is (or have their "last seen" timestamp updated).
-7. FastAPI reads from PostgreSQL to serve search/filter/list requests from the frontend.
-8. The Next.js frontend calls the FastAPI backend and renders results for the user, who can search, filter, and click through to the original application page.
+## Data Lifecycle
 
-## Out of Scope for This Architecture (For Now)
+```text
+new posting                    → insert, is_active = true
+existing posting, still open   → update last_seen_at
+existing posting, not in       → mark is_active = false
+  this run's results             (only after that company's fetch succeeded)
+previously-inactive posting     → reactivate (is_active = true again)
+  reappears
+company's scrape fails          → that company's existing records are
+  outright                        left untouched — no deactivation happens
+                                   without a successful fetch to justify it
+```
+
+This is a deliberate correctness property, not an incidental one: a transient network error or a temporary API change must never be interpreted as "every posting at this company just closed." Deactivation only happens when the scraper actually saw a complete, successful result set that no longer contains a given posting.
+
+## Deduplication
+
+Identity is a normalized `(company_id, title, location)` triple, hashed into a `dedupe_key` column with a database-level `UNIQUE` constraint — not application-level bookkeeping, so a race or a bug in the upsert logic can't silently create a duplicate; it would raise an `IntegrityError` instead. This was chosen over the source URL as the natural key because some ATS platforms rotate posting URLs on re-post without the underlying role changing. A known long-term alternative — using the ATS's own internal posting ID where available — hasn't been necessary yet and isn't currently planned as a migration; the current approach has produced zero duplicate keys across every verification pass to date.
+
+## Classification
+
+Deterministic, not ML: an ordered list of `(category, keyword)` pairs, checked via word-boundary regex against the normalized title, with the **longest matching keyword winning** when a title matches more than one. A separate exclusion list removes technical/vocational titles (software engineering, data science, skilled trades) before classification runs at all. One rule is industry-scoped rather than purely title-based: "Capital Markets" means real-estate investment sales at a real-estate services firm but investment-banking capital markets at a bank, so that rule additionally checks the posting company's `industry` field — the only place industry context feeds into classification, added specifically because a global keyword in either direction would have misclassified the other meaning. Every keyword — including the newest category, Legal — was added only after auditing real postings and checking the *entire* active dataset for collisions; several proposed rules were investigated and deliberately rejected when that check found a real regression risk (see "Implementation Notes (Phase 10 Step 9)").
+
+## Failure Model
+
+| Failure | Handling |
+|---|---|
+| Network error fetching one company's listings | Caught by that company's `run()`; logged; other companies unaffected; that company's existing data untouched |
+| Malformed individual listing (missing field, unparseable date) | Caught in `parse_listing`; that listing skipped; rest of the company's run continues |
+| A whole company's ATS blocked/changed/down | Scheduler catches the exception, marks that company failed for this run, continues to the next company |
+| GitHub Actions job itself times out mid-run | Each company's `run()` commits its own transaction, so a mid-run cancellation can only lose that cycle's update for whichever company was in flight — never a partial write |
+| Notification send fails | That send's events are marked `FAILED` (never `SENT`); not retried automatically within the same run, visible for manual investigation |
+
+## Scaling
+
+Measured (not estimated): 73 companies via 8 concurrent scrapers currently runs in ~5-7 minutes against a 40-minute GitHub Actions budget. See "Implementation Notes (Phase 10 Step 8)" for the linear-extrapolation reasoning behind why this holds toward ~200 companies without an architecture change.
+
+## Out of Scope (Deliberately)
 
 - No microservices — the backend is a single FastAPI application.
 - No Kubernetes or container orchestration.
-- No Databricks or big-data infrastructure.
-- No search index (e.g., Elasticsearch) — PostgreSQL query capabilities are sufficient at MVP scale.
-- No AI/ML components.
+- No distributed job queue — a GitHub Actions cron + thread pool is sufficient at this scale.
+- No search index (e.g., Elasticsearch) — PostgreSQL's own query capabilities are sufficient at this data volume.
+- No ML/LLM classification — see "Classification" above for why deterministic keyword matching was chosen deliberately, not as a placeholder for something more sophisticated later.
+
+---
+
+# Implementation History
+
+Everything below is a chronological log, written at the time each phase shipped — kept because it documents *why* each decision was made (including proposals that were investigated and rejected), which is often more useful in an interview than the current-state summary above. It is not required reading to understand the system; the sections above are.
 
 ## Implementation Notes (Phase 1 — Database)
 
@@ -191,11 +198,21 @@ Company Career Websites
 
 **GitHub Actions (`.github/workflows/scraper.yml`).** Runs on a `0 */6 * * *` cron (every 6 hours, UTC) and via manual `workflow_dispatch`. Steps: checkout → Python 3.12 → `pip install -r requirements.txt` → `alembic upgrade head` → `python -m scrapers.scheduler`. A `concurrency` group prevents overlapping runs (a manual trigger racing a scheduled one) from writing to the database at the same time. `DATABASE_URL` is a GitHub Actions repository secret, referenced via `${{ secrets.DATABASE_URL }}` and never printed to logs.
 
-**Scraper execution.** `scrapers/scheduler.py` is the entry point both locally and in CI: it iterates a fixed list of company scraper classes (8 as of Phase 7 - see "Scraper Architecture" below), running each independently. One company's scraper raising an exception outright (e.g. its API is unreachable) is caught, logged, and skipped — it does not stop the other companies' scrapers, and because each `BaseScraper.run()` commits its own transaction, a failed company never leaves partial writes. Within a single company's run, `BaseScraper.run()` now also reconciles lifecycle state: any internship still marked active in the database but absent from that run's fetched listings is set `is_active = False` (added in Phase 6 — previously nothing did this). This only runs after a successful fetch, so a scraper that fails before returning any listings can never mass-deactivate a company's postings.
+**Scraper execution.** `scrapers/scheduler.py` is the entry point both locally and in CI: it runs the full list of company scraper classes (73 as of Phase 10 Step 9 - see "Scraper Hierarchy" below) through a bounded thread pool (`MAX_PARALLEL_SCRAPERS = 8`, added in Phase 10 Step 5 once sequential execution started approaching the GitHub Actions timeout). One company's scraper raising an exception outright (e.g. its API is unreachable) is caught, logged, and skipped — it does not stop the other companies' scrapers, and because each `BaseScraper.run()` commits its own transaction, a failed company never leaves partial writes. Within a single company's run, `BaseScraper.run()` also reconciles lifecycle state: any internship still marked active in the database but absent from that run's fetched listings is set `is_active = False`. This only runs after a successful fetch, so a scraper that fails before returning any listings can never mass-deactivate a company's postings.
 
 **Environment variables and environment separation.** Local development reads `.env` (backend, via `python-dotenv`) and `frontend/.env.local` (frontend), both gitignored. Production configuration is split across three separate surfaces that all happen to reference the same values: Render environment variables (used by the live API process), Vercel environment variables (used at frontend build/runtime), and GitHub Actions repository secrets (used by the scheduled scraper job). No production credential is ever committed, logged, or printed — verified against the full git history, not just the current `.gitignore`.
 
-**Production vs development.** The only difference in application code between environments is which values the existing env-var reads (`DATABASE_URL`, `CORS_ALLOWED_ORIGINS`, `NEXT_PUBLIC_API_BASE_URL`) resolve to — there is no separate "production mode" branch of logic, no feature flags, and no hardcoded environment-specific URLs anywhere in the codebase.
+| Variable | Where | Purpose |
+|---|---|---|
+| `DATABASE_URL` | `.env`, Render, GitHub Actions | PostgreSQL connection string |
+| `CORS_ALLOWED_ORIGINS` | `.env`, Render | Comma-separated allowlist of origins permitted to call the API — never a wildcard |
+| `NEXT_PUBLIC_API_BASE_URL` | `frontend/.env.local`, Vercel | Base URL the frontend calls |
+| `CLERK_JWKS_URL`, `CLERK_SECRET_KEY` | `.env`, Render | Backend verifies session tokens independently against Clerk's JWKS; the secret key is used only for one-time email lookups on first sign-in |
+| `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY` | `frontend/.env.local`, Vercel | Next.js's own Clerk SDK — a separate use of the secret key from the backend's |
+| `RESEND_API_KEY`, `NOTIFICATIONS_FROM_EMAIL` | `.env`, Render, GitHub Actions | Email provider for the notification digest job |
+| `FRONTEND_BASE_URL` | `.env`, Render | Builds internship detail-page links inside notification emails |
+
+**Production vs development.** The only difference in application code between environments is which values the existing env-var reads resolve to — there is no separate "production mode" branch of logic, no feature flags, and no hardcoded environment-specific URLs anywhere in the codebase.
 
 ## Implementation Notes (Phase 7 — Scraper Expansion & Data Quality)
 

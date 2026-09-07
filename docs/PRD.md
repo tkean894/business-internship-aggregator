@@ -3,6 +3,8 @@
 ## Product Name
 Business Internship Aggregator
 
+> **Status note:** this document reflects the original MVP scope as planned before implementation began. The MVP shipped as scoped below, and several items explicitly listed as "out of scope for MVP" — user accounts, saved internships, and email notifications — were subsequently built in Phase 9 and are live in production today. Kept here unedited as a record of the original scoping decision (deliberately shipping a smaller, validated core first); see `docs/roadmap.md` for what was actually built and when.
+
 ## Problem
 
 Business students looking for internships face a fragmented search process. Relevant roles in Product Management, Business Analytics, Finance, Accounting, Consulting, Marketing, Operations, Supply Chain, Strategy, and Human Resources are scattered across hundreds of individual company career sites, each with different layouts, filters, and posting cadences. There is no single place to search across them.

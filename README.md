@@ -1,234 +1,180 @@
 # Business Internship Aggregator
 
-## Live Application
+A production-deployed platform that aggregates business internships (Finance, Consulting, Marketing, Operations, and 10 other functions) from 73 major employers' career sites into one searchable, filterable interface — the kind of centralized aggregator that already exists for software engineering internships, but not for business ones.
 
-| | URL |
+## Live Demo
+
+| | |
 |---|---|
-| Frontend | https://business-internship-aggregator.vercel.app |
-| Backend API | https://business-internship-aggregator-api.onrender.com |
+| App | https://business-internship-aggregator.vercel.app |
+| API | https://business-internship-aggregator-api.onrender.com |
 | API Docs (Swagger) | https://business-internship-aggregator-api.onrender.com/docs |
 
-The backend runs on Render's free tier, which spins down after ~15 minutes of inactivity — the first request after a quiet period can take 30-50 seconds while it cold-starts. Subsequent requests are fast.
+The API runs on Render's free tier, which sleeps after ~15 minutes of inactivity — the first request after a quiet period can take 30-50 seconds to cold-start. The frontend calls it directly, so the same delay shows up on your first page load if the app has been idle.
 
-## Overview
+## What It Does
 
-Business Internship Aggregator automatically discovers and aggregates business-related internship opportunities from company career websites, presenting them in one searchable, filterable interface. It is being built as both a portfolio project and a genuinely useful tool for business students.
+- **Aggregates** internship postings across 73 employers on 3 different ATS (applicant tracking system) platforms, without a single company-specific HTML scraper.
+- **Normalizes** every posting — regardless of source platform — into one consistent schema.
+- **Classifies** each posting into one of 14 business functions (Finance, Accounting, Consulting, Marketing, Operations, Supply Chain, Strategy, Human Resources, Sales, Business Analytics, Product Management, Real Estate, Legal, Other) using a deterministic, keyword-based classifier — not an LLM.
+- **Filters out technical roles** (software engineering, data science, skilled trades) that don't belong on a *business* internship board, even when they're posted by the same companies.
+- **Tracks posting lifecycle**: first-seen/last-seen timestamps, and postings that disappear from a company's career site are marked inactive automatically — never silently deleted.
+- **Deduplicates** postings via a database-enforced uniqueness constraint, so the same role scraped twice never shows up twice.
+- Serves it all through search, category/company/location/industry filters, sorting, and pagination.
 
-## Problem
+## Production Snapshot
 
-Business students looking for internships in Product Management, Business Analytics, Finance, Accounting, Consulting, Marketing, Operations, Supply Chain, Strategy, Sales, Real Estate, or Human Resources have to manually check dozens of individual company career pages, since opportunities are scattered with no central source. Most existing internship aggregators are built for and optimized around software engineering roles, leaving business students underserved.
+*As of 2026-09-06.* Job counts change continuously as the scraper runs every 6 hours — treat these as a representative snapshot, not a live-updating claim.
 
-## Solution
-
-An automated pipeline that scrapes company career pages for business-relevant internships, normalizes and deduplicates the data, stores it in a central database, and exposes it through a searchable, filterable web interface — kept up to date without requiring students to check each company site individually.
-
-## Current Status
-
-**Deployed to production, scraping 40 real companies across 3 ATS platforms, with user accounts and notifications (Phases 1–9 complete).** PostgreSQL schema, SQLAlchemy models, and Alembic migrations are implemented and tested. A FastAPI backend (search, filtering by category/company/location/industry, pagination, sorting - all still fully usable anonymously) is implemented and tested against live data, plus authenticated endpoints for saving internships and managing notification preferences. A Next.js (App Router, TypeScript, Tailwind) frontend consumes that API — search, filters, sorting, freshness/"New" indicators, category and company discovery, internship and company detail pages, sign-in/sign-up, saving internships, and a notification-preferences page. The scraper runs on a schedule via GitHub Actions against a managed production database, followed by an idempotent notification-processing step (see "Live Application" and "Production" below). See `docs/roadmap.md` for the full phase-by-phase build order.
-
-## Supported ATS Platforms & Companies
-
-| ATS | Companies |
+| Metric | Value |
 |---|---|
-| Greenhouse | Robinhood, Cloudflare, Braze, Rocket Lab, SpaceX, Red Ventures, SpotHopper |
-| Workday | Abbott Laboratories, Medtronic, Invesco, AIA, Applied Materials, Chevron, Smucker, Assurant, Barclays, Federal Reserve Bank of New York, CIBC, Piper Sandler, Texas Capital Bank, PwC, Guidehouse, GE Aerospace, Boeing, The Walt Disney Company, Magna International, Polaris, GlobalFoundries, MKS Instruments, RaceTrac, Cox Enterprises, Anheuser-Busch InBev, IFF, Saputo, Primient, Marathon Petroleum, Medline, Airbus, ICF International |
-| Lever | HCVT |
+| Employers integrated | 73 |
+| Active internships | ~1,500 |
+| Total tracked records (active + historical) | ~1,800 |
+| Business function categories | 14 |
+| ATS integrations | 3 (Workday, Greenhouse, Lever) |
+| Automated tests | 126 |
+| Scrape frequency | every 6 hours |
+| Scheduler runtime | ~5-7 minutes |
 
-All three integrations share the same `BaseScraper` lifecycle (company lookup, dedup, insert/update, inactive-lifecycle handling, per-listing error isolation, scraper-run metrics). A company only ever needs a small config file under `scrapers/companies/` — see "Scraper Architecture" in `docs/architecture.md`. Companies span Technology, Financial Services, Aerospace, Healthcare, Investment Management, Insurance, Manufacturing, Energy, Food & Beverage, Consulting, Media & Entertainment, Automotive, and Retail.
-
-**Expansion in progress:** `scrapers/company_registry.py` tracks 18 additional researched/deferred candidate companies (toward a ~200-company target) with per-company ATS platform, tier, and verification status, plus 1 deliberately excluded. See `docs/architecture.md` ("Implementation Notes (Phase 10 Step 3)") and `docs/roadmap.md` (Phase 9) for the registry design and rollout plan.
+For live, current numbers rather than a snapshot, the [API itself](https://business-internship-aggregator-api.onrender.com/companies) is the source of truth.
 
 ## Tech Stack
 
 | Layer | Technology |
 |---|---|
-| Frontend | Next.js, React, Tailwind CSS |
-| Backend | Python, FastAPI |
-| Database | PostgreSQL |
-| ORM | SQLAlchemy |
-| Scraping | Python, `requests` (both current ATS integrations expose public JSON APIs; Playwright remains a dependency for a future non-API ATS, per `docs/roadmap.md`) |
-| Automation | GitHub Actions |
-| Authentication | Clerk |
-| Transactional email | Resend |
-| Testing | pytest |
-| Version Control | Git + GitHub |
+| Frontend | Next.js (App Router), TypeScript, Tailwind CSS |
+| Backend | Python, FastAPI, Pydantic |
+| Database | PostgreSQL (Neon), SQLAlchemy, Alembic |
+| Scraping | Python, `requests` — no browser automation, since every integrated ATS exposes a JSON API |
+| Automation | GitHub Actions (scheduled scraping + CI) |
+| Auth | Clerk |
+| Email | Resend |
+| Testing | pytest (126 tests) |
+| Deployment | Vercel (frontend), Render (backend), Neon (database) |
 
-This stack is intentionally kept simple and appropriate for a student-built MVP — no Kubernetes, microservices, or big-data infrastructure.
+Deliberately simple: no microservices, no Kubernetes, no search index, no ML infrastructure. Nothing here needs it at this scale, and adding it would be over-engineering, not architecture.
 
 ## Architecture
 
-```text
-Company Career Websites
-        ↓
-     Playwright
-        ↓
- Company Scrapers
-        ↓
- Data Normalization
-        ↓
- Duplicate Detection
-        ↓
-    PostgreSQL
-        ↓
-     FastAPI
-        ↓
-     Next.js
-        ↓
-       User
+```mermaid
+flowchart TD
+    A[Company career site<br/>Workday / Greenhouse / Lever JSON API] --> B[ATS-specific scraper<br/>WorkdayScraper / GreenhouseScraper / LeverScraper]
+    B --> C[Normalization<br/>shared schema]
+    C --> D[Business-relevance filter<br/>intern-title check + technical exclusions]
+    D --> E[Classification<br/>14-category deterministic classifier]
+    E --> F[Deduplication<br/>DB-enforced unique dedupe_key]
+    F --> G[(PostgreSQL / Neon)]
+    G --> H[FastAPI]
+    H --> I[Next.js frontend]
 ```
 
-Full details, including component responsibilities and data flow, are documented in [`docs/architecture.md`](docs/architecture.md).
+Every company scraper is a small config file (tenant/board ID + a few identifying fields) that subclasses one of three shared ATS scrapers — not a one-off HTML scraper per company. Adding company #74 is almost always a config change, not new scraping logic. Full component breakdown, data lifecycle, and the reasoning behind each design choice: [`docs/architecture.md`](docs/architecture.md).
 
-## Local Development
+## Supported ATS Platforms
 
-Requires PostgreSQL, Python 3.12+, and Node.js 20.9+ (LTS) installed locally.
+| Platform | Companies | Notes |
+|---|---:|---|
+| Workday | 65 | The large majority of Fortune 500-scale employers run Workday; one shared `WorkdayScraper` handles all of them via per-tenant config |
+| Greenhouse | 7 | Public JSON board API, no auth needed |
+| Lever | 1 | Same pattern — one shared integration, config-driven |
 
-**Environment variables** — copy `.env.example` to `.env` (backend) and `frontend/.env.example` to `frontend/.env.local` (frontend):
+Representative employers (spanning Financial Services, Consumer Goods, Aerospace, Retail, Healthcare, Consulting, Real Estate, and more): Procter & Gamble, Target, General Motors, UPS, Citigroup, Wells Fargo, Capital One, Barclays, Deutsche Bank, JLL, PwC, Boeing, Airbus, The Walt Disney Company, Coca-Cola, Kraft Heinz, Merck, Vanguard, Robinhood, Cloudflare. Full current list: [`/companies`](https://business-internship-aggregator-api.onrender.com/companies) or `scrapers/company_registry.py`.
 
-| Variable | Where | Purpose |
-|---|---|---|
-| `DATABASE_URL` | `.env` | PostgreSQL connection string |
-| `CORS_ALLOWED_ORIGINS` | `.env` | Origins allowed to call the API (default `http://localhost:3000`) |
-| `NEXT_PUBLIC_API_BASE_URL` | `frontend/.env.local` | Base URL the frontend calls (default `http://localhost:8000`) |
-| `CLERK_JWKS_URL`, `CLERK_SECRET_KEY` | `.env` | Backend verifies session tokens independently against Clerk's JWKS; secret key is only used for one-time email lookups (`backend/services/clerk_client.py`) |
-| `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY` | `frontend/.env.local` | Next.js's own Clerk SDK needs both — the secret key here is a *separate* use from the backend's copy (Next.js verifies sessions server-side via middleware/`auth()`) |
-| `RESEND_API_KEY`, `NOTIFICATIONS_FROM_EMAIL` | `.env` | Email provider for notifications (`backend/services/email.py`) |
+Beyond the 73 live integrations, the project maintains a researched registry of 299 target employers (`scrapers/company_registry.py`) — each with a priority tier, ATS platform, and verification status — used to prioritize which companies to build next. The registry is a research/planning tool, not a claim that all 299 are integrated. Several well-known employers were deliberately **not** built against after live verification found them blocked by bot-management systems (Avature-based career sites) or on ATS platforms with no accessible public API — see "Known Limitations" below.
 
-**Terminal 1 — PostgreSQL**: start the `postgresql-x64-16` Windows service (or however it's installed locally), and make sure the `business_internships` database exists.
+## Data Pipeline
 
-**Terminal 2 — FastAPI backend**:
-```
-py -m venv .venv
-.\.venv\Scripts\pip install -r requirements.txt
-.\.venv\Scripts\python -m alembic upgrade head
-.\.venv\Scripts\python -m uvicorn backend.api.main:app --reload
-```
-API docs: `http://127.0.0.1:8000/docs` (Swagger) or `http://127.0.0.1:8000/redoc`.
+1. Fetch open postings from a company's ATS (a single whole-board fetch or a narrowed API query, depending on what that ATS's API supports).
+2. Check whether the title is internship-shaped at all (`intern`/`internship`/finance's "summer analyst" convention).
+3. Exclude technical/vocational roles that don't belong on a business board (software engineering, data science, skilled trades — checked by keyword, not by company).
+4. Classify the surviving title into one of 14 business categories by longest keyword match; unmatched-but-legitimate business roles fall to **Other** rather than being force-fit.
+5. Compute a normalized dedupe identity (company + normalized title + normalized location) and validate the record.
+6. Insert new postings, update `last_seen_at` on existing ones.
+7. After a **successful** scrape, any previously-active posting not seen in that run is marked inactive — a failed scrape never touches existing data.
+8. Serve everything through the API and frontend.
 
-To populate real data, run a scraper directly, e.g. `.\.venv\Scripts\python -m scrapers.companies.robinhood`.
+## Classification
 
-**Terminal 3 — Next.js frontend**:
-```
-cd frontend
-npm install
-npm run dev
-```
-App: `http://localhost:3000`.
+Deterministic and keyword-based — no LLM, no embeddings, no ML model. Each title is checked against an ordered set of category keywords; the **longest matching keyword wins** (so a specific phrase like "market research" beats a generic one like "strategy" on the same title). A separate exclusion list removes technical/vocational roles before classification even runs. One category — "Capital Markets" — is industry-scoped: the same two words mean real-estate investment sales at a real-estate firm but investment-banking capital markets at a bank, so that one rule additionally checks the posting company's industry rather than title text alone.
 
-Example API requests:
-```
-GET /internships?search=marketing&category=Marketing&page=1&page_size=10
-GET /internships?company=Cloudflare&location=London&active=true
-GET /internships?industry=Healthcare&sort=first_seen_desc
-GET /internships/12
-GET /companies
-GET /companies/6
-GET /categories
-GET /me                                    (requires Authorization: Bearer <clerk token>)
-GET /me/saved                              (requires auth)
-GET /me/notification-preferences           (requires auth)
-POST /internships/12/save                  (requires auth)
-DELETE /internships/12/save                (requires auth)
-```
+This approach was a deliberate choice over an LLM classifier: it's free to run at scale, every classification decision is traceable to a specific keyword (genuinely explainable, not just "the model said so"), and every rule that's ever been added or rejected is documented with the real postings that motivated it. See `scrapers/classification.py` and `docs/architecture.md` for the full rule set and rejected-rule history.
 
-Notification processing (idempotent - safe to re-run):
-```
-.\.venv\Scripts\python -m backend.services.notifications
-```
+## Reliability
 
-**Running tests** (requires the local PostgreSQL setup above — tests run against the local dev database and clean up their own `test-`-prefixed data; external HTTP calls are mocked, so no scraper test depends on a real career site):
-```
-.\.venv\Scripts\python -m pytest tests/ -v
-```
+- **Per-company isolation**: one company's scraper failing (site redesign, API change, timeout) doesn't affect any other company's run.
+- **Per-listing isolation**: a single malformed posting within a company's feed is skipped and logged, not fatal to that company's whole run.
+- **Lifecycle safety**: a company's existing active postings are only ever marked inactive after that company's scrape *succeeds* — a failed run preserves everything as-is rather than wiping data based on incomplete information.
+- **Idempotent notifications**: a database-level `UNIQUE` constraint (not application bookkeeping) guarantees a retried notification job can never send a duplicate email.
+- **126 automated tests** covering classification, deduplication, lifecycle transitions, scraper-run metrics, the scheduler, and the API.
 
-## Production
+## Scalability
 
-```text
-Career Sites
-     ↓
-  Scrapers
-     ↓
-GitHub Actions (scheduled + manual)
-     ↓
-Managed PostgreSQL (Neon)
-     ↓
-   FastAPI (Render)
-     ↓
-   Next.js (Vercel)
-     ↓
-    User
-```
+Measured, not estimated: the 73-company scheduler currently runs in ~5-7 minutes with 8 concurrent scrapers, against a 40-minute GitHub Actions budget. Linear extrapolation (safe given per-company cost is bounded, independent network I/O) puts 150-200 companies comfortably inside that same budget without any architecture change. No distributed infrastructure is needed at this scale, and building it preemptively would be effort spent on a problem that doesn't exist yet.
 
-| Layer | Provider | Notes |
-|---|---|---|
-| Database | [Neon](https://neon.tech) | Managed serverless Postgres, free tier. Schema created via `alembic upgrade head`, never manual DDL. |
-| Backend | [Render](https://render.com) | Free Web Service, deployed via `render.yaml` (Blueprint). Start command runs `alembic upgrade head` before `uvicorn` on every deploy, so schema changes ship automatically. No `--reload`, no debug mode. |
-| Frontend | [Vercel](https://vercel.com) | Auto-deploys `frontend/` on push to `main`. |
-| Scraper automation | GitHub Actions (`.github/workflows/scraper.yml`) | Runs on a 6-hour schedule and via manual `workflow_dispatch`. Applies migrations, runs `python -m scrapers.scheduler` (every company scraper, per-company error isolation), then `python -m backend.services.notifications` (idempotent - see "Notifications" below). |
-| Authentication | [Clerk](https://clerk.com) | Free tier (10,000 MAU). Handles sign-up/sign-in/sessions entirely; FastAPI verifies each request's session token independently against Clerk's JWKS (`backend/api/auth.py`) rather than trusting the frontend. |
-| Email | [Resend](https://resend.com) | Free tier. Without a verified sending domain (this project has none - see "Domain" below), delivery is limited to the Resend account owner's own address; the notification pipeline itself is fully built and tested regardless. |
+## Data Quality
 
-**Environment separation**: local development uses `.env` (backend) / `frontend/.env.local` (frontend), both gitignored and never committed. Production configuration lives entirely in Render's environment variables, Vercel's environment variables, and GitHub Actions repository secrets — never in source. `DATABASE_URL` in particular is a GitHub Actions secret (used by the scraper workflow) and a Render environment variable (used by the API) — the two are separate configuration surfaces pointing at the same managed database, and neither value is ever logged or committed.
+Classification accuracy has been treated as an ongoing, evidence-driven process rather than a one-time build: every keyword rule (and every category, including the newest — Legal) exists because a full audit of real postings showed a recurring, unambiguous pattern, and every rule is checked against the *entire* active dataset for collisions before being added. Roughly a third of active postings remain in **Other** — genuinely ambiguous titles, insufficient information, or business functions too thin/company-specific to warrant a dedicated category — and that's treated as an honest result, not a metric to chase toward zero.
 
-**Notifications**: see `docs/architecture.md` ("Notifications") for the full design. In short: after each scraper run, a separate step registers which (user, internship) pairs are newly eligible for a notification (a new posting matching someone's saved preferences, or a saved internship going inactive) as rows in `notification_events`, then sends emails to whoever is due based on their frequency preference. A `UNIQUE(user_id, internship_id, event_type)` database constraint - not application bookkeeping - is what makes this idempotent: re-running the whole job after nothing changed inserts zero new rows, so a retried GitHub Actions workflow can never send a duplicate.
+## Known Limitations
 
-**CORS**: `CORS_ALLOWED_ORIGINS` on Render is a comma-separated allowlist (currently local dev + the production Vercel URL) — never a wildcard.
-
-## Planned MVP Features
-
-- Automated internship collection from company career sites
-- Data normalization into a consistent schema
-- PostgreSQL storage
-- Duplicate detection
-- Basic REST API (search, filter, pagination)
-- Searchable web interface with basic filtering
-
-User accounts, saved internships, and email notifications have since been added (Phase 9) - see "Current Status" above and `docs/roadmap.md`. AI resume matching, personalized recommendations, application tracking, and advanced analytics remain **out of scope** for now — see [`docs/PRD.md`](docs/PRD.md) for full scope and rationale.
-
-## Roadmap
-
-Development proceeds in phases, from foundation → database → scraping MVP → backend → frontend → multi-company scraping → automation/deployment → dataset expansion → accounts/saved internships/notifications → intelligence (AI). Full phase-by-phase detail, including goals and definitions of done, is in [`docs/roadmap.md`](docs/roadmap.md).
-
-## Future Vision
-
-Beyond the current feature set, the long-term goal is to become a broader internship discovery and career intelligence platform for business students — including application tracking, resume matching, AI-powered recommendations, and hiring trend analytics.
+- Several major employers (e.g., IBM, CBRE) run career platforms (Avature) that return bot-management challenges to any non-browser client — not integrated, since bypassing that would require capabilities and access assumptions this project deliberately avoids.
+- Bare "IT" and "data science" titles can't be safely excluded as technical roles without a deeper classifier restructure — a few genuine technical postings remain visible as a result. Documented, not silently ignored.
+- Some ambiguous or company-specific titles (generic "Digital" practice names, rotational-program department names) stay in **Other** rather than being guessed into a category.
+- Production database access is API-only from this project's tooling — there's no direct admin/SQL access outside Neon's own dashboard, so some verification (e.g., confirming zero duplicate keys in production) relies on the database's own `UNIQUE` constraint rather than a direct query.
+- The 299-company registry is a research/prioritization tool, not a claim that all of them are integrated — only 73 are live today.
 
 ## Repository Structure
 
 ```text
-business-internship-aggregator/
-│
-├── frontend/
-│   ├── app/            # Next.js App Router pages (home, internship/company detail,
-│   │                   #   sign-in/up, saved, settings/notifications)
-│   ├── components/     # Reusable UI components (incl. SaveButton, NotificationPreferencesForm)
-│   ├── middleware.ts    # Clerk auth middleware
-│   └── lib/             # Typed API client + shared types
-├── backend/
-│   ├── api/           # FastAPI app, routes, response schemas, auth.py (Clerk JWT verification)
-│   ├── models/         # SQLAlchemy models (incl. User, SavedInternship, NotificationPreference/Event)
-│   ├── services/        # email.py (Resend), notifications.py (eligibility + send), clerk_client.py
-│   └── database/       # DB session, dedupe-key utils, seed data
-├── scrapers/
-│   ├── companies/      # Per-company scraper configs (see "Supported ATS Platforms" above)
-│   ├── base_scraper.py     # Shared DB/lifecycle/metrics logic for every ATS
-│   ├── greenhouse.py       # Shared Greenhouse ATS fetch/parse logic
-│   ├── workday.py          # Shared Workday ATS fetch/parse logic
-│   ├── lever.py            # Shared Lever ATS fetch/parse logic
-│   ├── classification.py   # Title -> category classification
-│   ├── schemas.py          # NormalizedInternship + pre-insert validation
-│   ├── http_utils.py       # Shared retry/backoff HTTP session
-│   ├── text_utils.py       # Shared HTML/date/location cleanup
-│   └── scheduler.py        # Runs all company scrapers (invoked by GitHub Actions)
-├── database/           # database/schema.sql (source-of-truth DDL)
-├── alembic/             # Migrations
-├── tests/               # pytest suite (classification, dedupe, lifecycle, metrics, scheduler)
-├── docs/                # Product and technical documentation
-└── README.md
+frontend/           Next.js App Router pages + components + typed API client
+backend/
+  api/               FastAPI app, routes, response schemas, Clerk JWT verification
+  models/            SQLAlchemy models
+  services/          Email + notification-eligibility logic
+scrapers/
+  companies/         One small config class per integrated company (73)
+  base_scraper.py     Shared lifecycle/dedupe/DB-write logic for every ATS
+  workday.py, greenhouse.py, lever.py   Shared per-ATS fetch/parse logic
+  classification.py   Title -> category classifier
+  company_registry.py Researched employer pool + priority/verification tracking
+  scheduler.py         Runs every company scraper (invoked by GitHub Actions)
+alembic/             Schema migrations
+tests/               126 pytest tests (classification, dedupe, lifecycle, API, scheduler)
+docs/                Architecture, PRD, roadmap
 ```
+
+## Running Locally
+
+Requires PostgreSQL, Python 3.12+, and Node.js 20.9+.
+
+```bash
+# Backend
+py -m venv .venv
+.venv\Scripts\pip install -r requirements.txt
+.venv\Scripts\python -m alembic upgrade head
+.venv\Scripts\python -m uvicorn backend.api.main:app --reload
+# API docs at http://127.0.0.1:8000/docs
+
+# Populate real data by running any scraper directly, e.g.:
+.venv\Scripts\python -m scrapers.companies.robinhood
+
+# Frontend (separate terminal)
+cd frontend && npm install && npm run dev
+# App at http://localhost:3000
+
+# Tests (requires the local Postgres setup above)
+.venv\Scripts\python -m pytest tests/ -v
+```
+
+Copy `.env.example` → `.env` and `frontend/.env.example` → `frontend/.env.local` first — each file documents what every variable is for inline. Full environment variable reference, example API requests, and production deployment setup (Vercel/Render/Neon/GitHub Actions): see "Production Architecture" in [`docs/architecture.md`](docs/architecture.md).
+
+## Project Status
+
+**Production-deployed and actively maintained.** Core pipeline (scraping, normalization, classification, deduplication, lifecycle tracking), search/filter/sort, user accounts, saved internships, and email notifications are all live. See [`docs/roadmap.md`](docs/roadmap.md) for the full phase-by-phase build history.
 
 ## Documentation
 
-- [Product Requirements Document](docs/PRD.md)
-- [Architecture](docs/architecture.md)
-- [Roadmap](docs/roadmap.md)
+- [Architecture](docs/architecture.md) — component design, data lifecycle, and the reasoning behind every major technical decision
+- [Product Requirements](docs/PRD.md) — original problem framing and MVP scope
+- [Roadmap](docs/roadmap.md) — phase-by-phase build history
